@@ -13,7 +13,7 @@ A collection of useful bash and python scripts to keep your macOS clean, healthy
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/fuck-cleanmymac.git
+   git clone https://github.com/iposho/fuck-cleanmymac.git
    cd fuck-cleanmymac
    ```
 
