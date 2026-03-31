@@ -1,5 +1,7 @@
 # fuck-cleanmymac 🧹
 
+![Hero poster](preview.webp)
+
 A comprehensive macOS system cleaner and health monitor toolkit designed to safely free up disk space, monitor system health, and provide automated maintenance.
 
 ## Features
