@@ -39,21 +39,85 @@ A comprehensive macOS system cleaner and health monitor toolkit designed to safe
 
 ## Installation
 
-### 1. Clone the repository
+### Automatic Installation (Recommended)
+
+The easiest way to install **fuck-cleanmymac** on macOS is using the auto-installation script:
+
+#### One-liner Installation
 ```bash
-git clone https://github.com/yourusername/fuck-cleanmymac.git
+curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/install.sh | bash
+```
+
+This single command will:
+- ✅ Clone the repository to `~/.scripts/fuck-cleanmymac`
+- ✅ Create necessary directories (`~/.scripts`, `~/.config/fuck-cleanmymac`, `~/.scripts/logs`)
+- ✅ Set up symlinks in `~/.scripts` for easy access
+- ✅ Add scripts to your PATH (`.zshrc` or `.bashrc`)
+- ✅ Copy configuration template to `~/.config/fuck-cleanmymac/cleaner.conf`
+- ✅ Optionally install dependencies (smartmontools, osx-cpu-temp, mas)
+- ✅ Optionally set up automatic weekly cleanup via cron
+- ✅ Optionally install SwiftBar menu bar plugin
+
+#### Non-Interactive Installation
+If you prefer to skip interactive prompts, you can specify options:
+
+```bash
+./install.sh --skip-deps --skip-cron --skip-swiftbar
+```
+
+#### Available Installation Options
+```bash
+./install.sh                    # Interactive installation (recommended)
+./install.sh --skip-deps        # Skip optional dependency installation
+./install.sh --skip-cron        # Skip cron job setup
+./install.sh --skip-swiftbar    # Skip SwiftBar plugin installation
+./install.sh --uninstall        # Remove installation completely
+./install.sh --help             # Show all available options
+```
+
+#### After Installation
+Once installed, you can use the scripts from anywhere:
+
+```bash
+cleaner.sh                      # Run cleanup
+cleaner.sh --dry-run            # Preview what will be cleaned
+health.sh                       # Check system health
+update.sh                       # Check for updates
+```
+
+#### Update Existing Installation
+To update an existing installation:
+```bash
+cd ~/.scripts/fuck-cleanmymac
+git pull origin main
+```
+
+Or reinstall:
+```bash
+curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/install.sh | bash
+```
+
+---
+
+### Manual Installation
+
+If you prefer to set up manually or the auto-installer doesn't work for you:
+
+#### 1. Clone the repository
+```bash
+git clone https://github.com/iposho/fuck-cleanmymac.git
 cd fuck-cleanmymac
 chmod +x cleaner.sh health.sh update.sh
 ```
 
-### 2. Optional: Add to PATH
+#### 2. Optional: Add to PATH
 ```bash
 mkdir -p ~/.scripts
 cp cleaner.sh health.sh update.sh ~/.scripts/
 export PATH="$HOME/.scripts:$PATH"
 ```
 
-### 3. SwiftBar Plugin (Optional)
+#### 3. SwiftBar Plugin (Optional)
 ```bash
 # Create plugins directory if it doesn't exist
 mkdir -p ~/Library/Application\ Support/SwiftBar/Plugins
