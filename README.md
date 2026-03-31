@@ -1,61 +1,282 @@
-# fuck cleanmymac
+# fuck-cleanmymac 🧹
 
-A collection of useful bash and python scripts to keep your macOS clean, healthy, and up-to-date.
+A comprehensive macOS system cleaner and health monitor toolkit designed to safely free up disk space, monitor system health, and provide automated maintenance.
 
-## 📦 What's inside?
+## Features
 
-- `cleaner.sh`: Deep cleaning script (Docker, npm, yarn, brew, Xcode, app caches).
-- `health.sh`: Comprehensive system health report (SSD wear, battery cycles, RAM/CPU load, security status).
-- `update.sh`: All-in-one updater (Homebrew, App Store via `mas`, npm/pnpm).
-- `swiftbar/`: A Python plugin for [SwiftBar](https://swiftbar.app/) to monitor your system directly from the menu bar.
+### 🧹 **Cleaning (`cleaner.sh`)**
+- **Safe path validation** - prevents accidental deletion of system directories
+- **Dry-run mode** (`--dry-run`) - preview what will be deleted without actually deleting
+- **Docker cleanup** - removes unused containers, images, and volumes
+- **Package manager caches** - cleans npm, yarn, Homebrew, pip, gem caches
+- **Application caches** - targets Cursor, Notion, Slack, Telegram, JetBrains IDEs
+- **System maintenance** - cleans user caches, logs, and trash
+- **Logging** - timestamped logs with automatic rotation (90 days retention)
+- **Notifications** - displays system notifications when cleanup completes
+- **Configuration file** - customize cleaning behavior via `cleaner.conf`
 
-## 🚀 Installation
+### 🏥 **Health Monitor (`health.sh`)**
+- **System information** - displays Mac model, CPU, memory, OS version, uptime
+- **Storage health** - shows SSD wear level, data written/read (via smartctl)
+- **Battery status** - reports cycle count, capacity, health assessment, estimated lifespan
+- **Memory usage** - detailed RAM breakdown (wired, active, inactive, free)
+- **CPU load** - displays load average and top 5 CPU-consuming processes
+- **Temperature monitoring** - CPU temperature (if tools available)
+- **Network info** - local and external IP addresses
+- **Security status** - Firewall, FileVault, System Integrity Protection status
+- **System notifications** - sends summary to Notification Center
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/iposho/fuck-cleanmymac.git
-   cd fuck-cleanmymac
-   ```
+### ⚡ **Update Utility (`update.sh`)**
+- **Homebrew updates** - upgrades installed packages
+- **System updates** - checks and installs macOS updates
+- **Self-updates** - optional check for script updates
+- **Safe execution** - error handling and notifications
 
-2. **Make scripts executable:**
-   ```bash
-   chmod +x *.sh
-   ```
+### 📊 **SwiftBar Plugin**
+- Real-time system monitoring in macOS menu bar
+- Quick access to cleaning and health check functions
+- Automatic refresh (configurable interval)
 
-3. **Install dependencies:**
-   To get the most out of these scripts, you'll need:
-   - [Homebrew](https://brew.sh/)
-   - `mas` (for App Store updates): `brew install mas`
-   - `smartmontools` (for SSD health): `brew install smartmontools`
-   - `osx-cpu-temp` (optional, for CPU temperature): `brew install osx-cpu-temp`
+## Installation
 
-4. **SwiftBar Integration:**
-   - Install [SwiftBar](https://swiftbar.app/).
-   - Open SwiftBar and point it to the `swiftbar/` directory in this project.
-   - It will automatically pick up `system-monitor.5s.py` and show stats in your menu bar.
+### 1. Clone the repository
+```bash
+git clone https://github.com/yourusername/fuck-cleanmymac.git
+cd fuck-cleanmymac
+chmod +x cleaner.sh health.sh update.sh
+```
 
-## 🛠 Usage
+### 2. Optional: Add to PATH
+```bash
+mkdir -p ~/.scripts
+cp cleaner.sh health.sh update.sh ~/.scripts/
+export PATH="$HOME/.scripts:$PATH"
+```
 
-### Cleaning the system
+### 3. SwiftBar Plugin (Optional)
+```bash
+# Create plugins directory if it doesn't exist
+mkdir -p ~/Library/Application\ Support/SwiftBar/Plugins
+
+# Copy the plugin
+cp swiftbar/system-monitor.5s.py ~/Library/Application\ Support/SwiftBar/Plugins/
+chmod +x ~/Library/Application\ Support/SwiftBar/Plugins/system-monitor.5s.py
+```
+
+## Usage
+
+### Basic Cleaning
 ```bash
 ./cleaner.sh
 ```
-This script clears caches for various apps (Cursor, Notion, Slack, JetBrains), cleans Docker builders, and empties the Trash.
 
-### Checking system health
+### Dry-run Mode (Preview)
+Preview what will be deleted without actually deleting:
+```bash
+./cleaner.sh --dry-run
+```
+
+### With Options
+```bash
+./cleaner.sh --dry-run --verbose    # Detailed preview
+./cleaner.sh --no-notify             # Skip notifications
+```
+
+### Help
+```bash
+./cleaner.sh --help
+```
+
+### Health Check
 ```bash
 ./health.sh
 ```
-Gives you a full report on SSD life, battery condition, memory usage, and security settings (SIP, Firewall, FileVault).
 
-### Updating everything
+### System Updates
 ```bash
 ./update.sh
 ```
-Updates Homebrew packages, App Store apps, global npm/pnpm packages, and checks for macOS system updates.
 
-## 📝 Customization
+## Configuration
 
-The scripts are designed to be portable. 
-- `cleaner.sh` logs are stored in `~/.scripts/logs`.
-- The SwiftBar plugin dynamically locates the shell scripts based on its folder location.
+### Config File Location
+The script looks for configuration in this order:
+1. `~/.config/fuck-cleanmymac/cleaner.conf`
+2. `~/.scripts/cleaner.conf`
+3. `./cleaner.conf` (project directory)
+
+### Create Custom Config
+```bash
+mkdir -p ~/.config/fuck-cleanmymac
+cp cleaner.conf ~/.config/fuck-cleanmymac/cleaner.conf
+```
+
+### Configuration Options
+Edit the config file to customize:
+- **LOG_DIR** - directory for log files (default: `~/.scripts/logs`)
+- **LOG_RETENTION_DAYS** - auto-delete logs older than N days (default: 90)
+- **CLEAN_DOCKER** - enable/disable Docker cleanup (default: true)
+- **CLEAN_HOMEBREW** - enable/disable Homebrew cleanup (default: true)
+- **CLEAN_NPM** - enable/disable npm cleanup (default: true)
+- **CLEAN_YARN** - enable/disable yarn cleanup (default: true)
+- **CLEAN_PIP** - enable/disable pip cleanup (default: true)
+- **CLEAN_APP_CACHES** - enable/disable app-specific caches (default: true)
+- **CLEAN_SYSTEM_CACHES** - enable/disable system caches (default: true)
+- **CLEAN_TRASH** - enable/disable trash cleanup (default: true)
+- **SHOW_NOTIFICATION** - enable/disable notifications (default: true)
+
+### Example Config
+```bash
+# Enable dry-run by default
+DRY_RUN=false
+
+# Disable Docker cleanup
+CLEAN_DOCKER=false
+
+# Change log location
+LOG_DIR="$HOME/Library/Logs/cleanmymac"
+
+# Keep logs for 180 days instead of 90
+LOG_RETENTION_DAYS=180
+```
+
+## Automation with Cron
+
+### Weekly Cleanup (Every Sunday at 2 AM)
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line:
+0 2 * * 0 /Users/YOUR_USERNAME/.scripts/cleaner.sh --no-notify >> /Users/YOUR_USERNAME/.scripts/logs/cron.log 2>&1
+```
+
+### Daily Health Check (Every day at 8 AM)
+```bash
+0 8 * * * /Users/YOUR_USERNAME/.scripts/health.sh >> /Users/YOUR_USERNAME/.scripts/logs/health.log 2>&1
+```
+
+### Weekly System Updates (Every Monday at 3 AM)
+```bash
+0 3 * * 1 /Users/YOUR_USERNAME/.scripts/update.sh --no-notify >> /Users/YOUR_USERNAME/.scripts/logs/update.log 2>&1
+```
+
+## Safety Features
+
+### Path Validation
+- Prevents deletion outside user's home directory and `/Users/<user>`
+- Blocks dangerous system paths: `/`, `/System`, `/usr`, `/bin`, `/sbin`, `/etc`, `/private`
+- Validates all paths before deletion
+
+### Dry-run Mode
+- Preview exactly what will be deleted
+- No files are actually modified
+- Safe to test new configurations
+
+### Logging
+- Every cleanup operation is logged with timestamp
+- Includes success/failure status for each action
+- Auto-rotates old logs
+
+### Pre-checks
+- Validates directories exist before deletion
+- Checks Docker daemon availability
+- Confirms package managers are installed before running
+
+## Logging
+
+Logs are saved to: `~/.scripts/logs/cleaner_YYYYMMDD_HHMMSS.log`
+
+View recent logs:
+```bash
+tail -f ~/.scripts/logs/cleaner_*.log
+```
+
+List all logs:
+```bash
+ls -lh ~/.scripts/logs/
+```
+
+## Troubleshooting
+
+### Docker cleanup hangs
+The script includes a 5-second timeout for Docker operations. If Docker is unresponsive, it will skip that step.
+
+### Permission denied errors
+Make sure scripts are executable:
+```bash
+chmod +x cleaner.sh health.sh update.sh
+```
+
+### Notification not showing
+- Ensure `osascript` is available: `command -v osascript`
+- Try running manually to see notification: `./cleaner.sh`
+
+### Battery info not showing in health.sh
+This is normal on desktop Macs without batteries. The script handles this gracefully.
+
+### smartctl not found
+To enable SSD monitoring:
+```bash
+brew install smartmontools
+```
+
+## Dependencies
+
+### Required
+- bash 4.0+
+- macOS 10.12+
+- Standard Unix utilities (find, grep, awk, sed)
+
+### Optional
+- `docker` - for Docker cleanup
+- `brew` - for Homebrew cleanup
+- `npm` / `yarn` - for JavaScript package manager cleanup
+- `smartctl` - for SSD health monitoring (install via `brew install smartmontools`)
+- `osx-cpu-temp` - for CPU temperature (install via `brew install osx-cpu-temp`)
+
+## Performance Notes
+
+- Full cleanup typically takes 5-30 seconds depending on system state
+- Dry-run is slightly faster as it doesn't delete files
+- Health check completes in 2-5 seconds
+- SwiftBar plugin refreshes every 5 seconds
+
+## Security Considerations
+
+- Scripts validate all paths before deletion
+- Config files are user-readable but may contain sensitive paths
+- Logs contain information about system state and cleaned items
+- Keep logs private or delete after review
+
+## Contributing
+
+Contributions are welcome! Please:
+1. Test changes thoroughly
+2. Preserve safety features
+3. Update documentation
+4. Follow bash best practices
+
+## License
+
+MIT License - feel free to use and modify
+
+## Disclaimer
+
+These scripts perform system maintenance operations. While extensive safety checks are implemented:
+- Always run `--dry-run` first to preview changes
+- Keep system backups
+- Test in non-critical environments first
+- Use at your own risk
+
+## Support
+
+For issues, questions, or suggestions:
+1. Check troubleshooting section above
+2. Review logs for detailed error information
+3. Test with `--dry-run` mode
+4. Open an issue with error logs
+
+---
+
+**Made with ❤️ for macOS users who want a cleaner system**

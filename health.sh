@@ -1,129 +1,104 @@
 #!/bin/bash
+set -uo pipefail
 
-# Пути для cron
+# Configure PATH for cron jobs
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 
+# Initialization
 START_DATE=$(date "+%Y-%m-%d %H:%M:%S")
-LOG_SEP="════════════════════════════════════════════════════════════"
-SUB_SEP="────────────────────────────────────────"
+SUB_SEP="═══════════════════════════════════════════════════════════"
+
+# Initialize optional metrics to prevent nounset errors
+PERCENT_USED=""
+DATA_WRITTEN=""
+DATA_READ=""
+MAX_CAPACITY=""
+MESSAGE=""
+TITLE="System Health Report"
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║       fuck cleanmymac: ОТЧЕТ О СОСТОЯНИИ СИСТЕМЫ             ║"
+echo "║       fuck cleanmymac: SYSTEM STATUS REPORT                  ║"
 echo "║       $START_DATE                                   ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
-[... skipping many lines ...]
-osascript -e "display notification \"$MESSAGE\" with title \"fuck cleanmymac: Health Check\" subtitle \"Завершено в $END_DATE\"" 2>/dev/null
 echo ""
 
-# ═══════════════════════════════════════════════════════════
-# 1. ИНФОРМАЦИЯ О СИСТЕМЕ
-# ═══════════════════════════════════════════════════════════
-echo "🖥️  ИНФОРМАЦИЯ О СИСТЕМЕ"
-echo $SUB_SEP
+# ═════════════════════════════════════════════════════════════
+# 1. SYSTEM INFORMATION
+# ═════════════════════════════════════════════════════════════
 
-# Модель Mac
+echo "🖥️  SYSTEM INFORMATION"
+echo "$SUB_SEP"
+
+# Mac Model
 MODEL=$(sysctl -n hw.model 2>/dev/null)
-MARKETING_NAME=$(system_profiler SPHardwareDataType | grep "Model Name" | awk -F': ' '{print $2}')
-CHIP=$(system_profiler SPHardwareDataType | grep "Chip" | awk -F': ' '{print $2}')
-SERIAL=$(system_profiler SPHardwareDataType | grep "Serial Number" | awk -F': ' '{print $2}')
-MEMORY=$(system_profiler SPHardwareDataType | grep "Memory" | awk -F': ' '{print $2}')
+MARKETING_NAME=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Model Name" | awk -F': ' '{print $2}')
+echo "Hardware:       $MODEL ($MARKETING_NAME)"
 
-echo "Модель:        $MARKETING_NAME ($MODEL)"
-echo "Процессор:     $CHIP"
-echo "Серийный №:    $SERIAL"
-echo "Память:        $MEMORY"
+# CPU
+CPU_COUNT=$(sysctl -n hw.ncpu 2>/dev/null)
+CPU_MODEL=$(sysctl -n machdep.cpu.brand_string 2>/dev/null)
+echo "CPU:            $CPU_COUNT cores - $CPU_MODEL"
 
-# Версия macOS
+# Memory
+MEMORY=$(sysctl -n hw.memsize 2>/dev/null)
+MEMORY_GB=$((MEMORY / 1073741824))
+echo "Memory:         ${MEMORY_GB} GB"
+
+# macOS Version
 OS_VERSION=$(sw_vers -productVersion)
 OS_BUILD=$(sw_vers -buildVersion)
 OS_NAME=$(sw_vers -productName)
-echo "Система:       $OS_NAME $OS_VERSION ($OS_BUILD)"
+echo "System:         $OS_NAME $OS_VERSION ($OS_BUILD)"
 
-# Uptime подробно
-BOOT_TIME=$(sysctl -n kern.boottime | awk -F'sec = ' '{print $2}' | awk -F',' '{print $1}')
+# Uptime details
+BOOT_TIME=$(sysctl -n kern.boottime 2>/dev/null | awk -F'sec = ' '{print $2}' | awk -F',' '{print $1}')
 CURRENT_TIME=$(date +%s)
-UPTIME_SEC=$((CURRENT_TIME - BOOT_TIME))
-UPTIME_DAYS=$((UPTIME_SEC / 86400))
-UPTIME_HOURS=$(( (UPTIME_SEC % 86400) / 3600 ))
-UPTIME_MINS=$(( (UPTIME_SEC % 3600) / 60 ))
-echo "Аптайм:        ${UPTIME_DAYS}д ${UPTIME_HOURS}ч ${UPTIME_MINS}м"
+UPTIME_SECONDS=$((CURRENT_TIME - BOOT_TIME))
+UPTIME_DAYS=$((UPTIME_SECONDS / 86400))
+UPTIME_HOURS=$(((UPTIME_SECONDS % 86400) / 3600))
+UPTIME_MINS=$(((UPTIME_SECONDS % 3600) / 60))
+echo "Uptime:         ${UPTIME_DAYS}d ${UPTIME_HOURS}h ${UPTIME_MINS}m"
+
 echo ""
 
-# ═══════════════════════════════════════════════════════════
-# 2. СОСТОЯНИЕ ДИСКА (SSD)
-# ═══════════════════════════════════════════════════════════
-echo "💾 СОСТОЯНИЕ ДИСКА (SSD)"
-echo $SUB_SEP
+# ═════════════════════════════════════════════════════════════
+# 2. STORAGE INFORMATION
+# ═════════════════════════════════════════════════════════════
 
+echo "💾 STORAGE INFORMATION"
+echo "$SUB_SEP"
+
+# SSD/HDD Info via smartctl (if available)
 if command -v smartctl &> /dev/null; then
-    DISK="disk0"
-    SMART_DATA=$(smartctl -a /dev/$DISK 2>/dev/null)
+    DISK_INFO=$(smartctl -i /dev/disk0 2>/dev/null)
+    if echo "$DISK_INFO" | grep -q "SMART support"; then
+        SMART_STATUS=$(echo "$DISK_INFO" | grep "SMART overall" | head -1 | awk -F': ' '{print $2}')
+        PERCENT_USED=$(echo "$DISK_INFO" | grep -i "Percentage Used" | awk '{print $NF}' | tr -d '%')
+        DATA_WRITTEN=$(echo "$DISK_INFO" | grep -i "Data Units Written" | awk '{print $(NF-1) " " $NF}')
+        DATA_READ=$(echo "$DISK_INFO" | grep -i "Data Units Read" | awk '{print $(NF-1) " " $NF}')
 
-    MODEL=$(echo "$SMART_DATA" | grep "Model Number" | awk -F: '{print $2}' | xargs)
-    SERIAL_SSD=$(echo "$SMART_DATA" | grep "Serial Number" | awk -F: '{print $2}' | xargs)
-    FIRMWARE=$(echo "$SMART_DATA" | grep "Firmware Version" | awk -F: '{print $2}' | xargs)
-    CAPACITY=$(echo "$SMART_DATA" | grep "Total NVM Capacity" | awk -F: '{print $2}' | xargs)
-    PERCENT_USED=$(echo "$SMART_DATA" | grep "Percentage Used" | awk -F: '{print $2}' | xargs | tr -d '%')
-    DATA_WRITTEN=$(echo "$SMART_DATA" | grep "Data Units Written" | awk -F: '{print $2}' | xargs)
-    DATA_READ=$(echo "$SMART_DATA" | grep "Data Units Read" | awk -F: '{print $2}' | xargs)
-    POWER_ON=$(echo "$SMART_DATA" | grep "Power On Hours" | awk -F: '{print $2}' | xargs)
-    POWER_CYCLES=$(echo "$SMART_DATA" | grep "Power Cycles" | awk -F: '{print $2}' | xargs)
-    TEMPERATURE=$(echo "$SMART_DATA" | grep "Temperature:" | head -1 | awk -F: '{print $2}' | xargs)
-    STATUS=$(echo "$SMART_DATA" | grep "SMART overall-health" | awk -F: '{print $2}' | xargs)
-
-    echo "Модель:             $MODEL"
-    echo "Серийный №:         $SERIAL_SSD"
-    echo "Прошивка:           $FIRMWARE"
-    echo "Ёмкость:            $CAPACITY"
-    echo "Температура:        $TEMPERATURE"
-    echo ""
-    echo "📊 Статистика использования:"
-    echo "  Износ:            ${PERCENT_USED}%"
-    echo "  Записано данных:  $DATA_WRITTEN"
-    echo "  Прочитано данных: $DATA_READ"
-    echo "  Часов работы:     $POWER_ON"
-    echo "  Циклов питания:   $POWER_CYCLES"
-    echo ""
-
-    # Расчет оставшегося ресурса
-    REMAINING=$((100 - PERCENT_USED))
-    if [[ $PERCENT_USED -le 10 ]]; then
-        HEALTH_ICON="🟢"
-        HEALTH_STATUS="Отличное"
-    elif [[ $PERCENT_USED -le 50 ]]; then
-        HEALTH_ICON="🟢"
-        HEALTH_STATUS="Хорошее"
-    elif [[ $PERCENT_USED -le 80 ]]; then
-        HEALTH_ICON="🟡"
-        HEALTH_STATUS="Удовлетворительное"
-    else
-        HEALTH_ICON="🔴"
-        HEALTH_STATUS="Требуется замена!"
+        echo "SMART Status:   $SMART_STATUS"
+        echo "Data Written:   ${DATA_WRITTEN:-N/A}"
+        echo "Data Read:      ${DATA_READ:-N/A}"
+        [ -n "$PERCENT_USED" ] && echo "Wear Level:     ${PERCENT_USED}%"
     fi
-
-    echo "$HEALTH_ICON Здоровье SSD:     $HEALTH_STATUS (осталось ~${REMAINING}% ресурса)"
-    echo "  SMART статус:     $STATUS"
-
-    [[ $PERCENT_USED -gt 80 ]] && echo "⚠️  ВНИМАНИЕ: Высокий износ! Рекомендуется замена диска."
-else
-    echo "⚠️  smartmontools не установлены"
-    echo "   Установка: brew install smartmontools"
 fi
 
-# Место на диске
+# Disk usage
 echo ""
-echo "📁 Использование дискового пространства:"
-df -H / | awk 'NR==2 {printf "  Всего: %s | Использовано: %s (%s) | Свободно: %s\n", $2, $3, $5, $4}'
+echo "Disk Space Usage:"
+df -H / | awk 'NR==2 {printf "  Total: %s | Used: %s (%s) | Available: %s\n", $2, $3, $5, $4}'
 echo ""
 
-# ═══════════════════════════════════════════════════════════
-# 3. СОСТОЯНИЕ БАТАРЕИ
-# ═══════════════════════════════════════════════════════════
-echo "🔋 СОСТОЯНИЕ БАТАРЕИ"
-echo $SUB_SEP
+# ═════════════════════════════════════════════════════════════
+# 3. BATTERY INFORMATION (if available)
+# ═════════════════════════════════════════════════════════════
 
-BATT_INFO=$(system_profiler SPPowerDataType 2>/dev/null)
+echo "🔋 BATTERY INFORMATION"
+echo "$SUB_SEP"
+
+BATT_INFO=$(pmset -g batt 2>/dev/null)
 
 if echo "$BATT_INFO" | grep -q "Battery Information"; then
     CYCLES=$(echo "$BATT_INFO" | grep "Cycle Count" | awk '{print $3}')
@@ -133,289 +108,255 @@ if echo "$BATT_INFO" | grep -q "Battery Information"; then
     FULLY_CHARGED=$(echo "$BATT_INFO" | grep "Fully Charged" | awk '{print $3}')
     CONDITION=$(echo "$BATT_INFO" | grep "Condition" | awk '{print $2}')
 
-    # Получаем информацию о зарядке
+    # Get charging information
     POWER_SOURCE=$(pmset -g batt | head -1 | grep -o "'.*'" | tr -d "'")
     TIME_REMAINING=$(pmset -g batt | grep -o '[0-9]*:[0-9]*' | head -1)
-    PERCENT_NOW=$(pmset -g batt | grep -o '[0-9]*%' | head -1)
 
-    echo "Текущий заряд:      $PERCENT_NOW"
-    echo "Источник питания:   $POWER_SOURCE"
-    [[ -n "$TIME_REMAINING" ]] && echo "Осталось времени:   $TIME_REMAINING"
-    echo ""
-    echo "📊 Здоровье батареи:"
-    echo "  Циклов зарядки:   $CYCLES"
-    echo "  Макс. ёмкость:    ${MAX_CAPACITY}%"
-    echo "  Состояние:        $CONDITION"
+    echo "Power Source:   $POWER_SOURCE"
+    [ -n "$CHARGE" ] && echo "Current Charge: $CHARGE"
+    [ -n "$TIME_REMAINING" ] && echo "Time Remaining: $TIME_REMAINING"
     echo ""
 
-    # Оценка здоровья батареи
+    # Assess battery health
     if [[ $MAX_CAPACITY -ge 90 ]]; then
         BAT_ICON="🟢"
-        BAT_STATUS="Отличное"
+        BAT_STATUS="Excellent"
     elif [[ $MAX_CAPACITY -ge 80 ]]; then
         BAT_ICON="🟢"
-        BAT_STATUS="Хорошее"
+        BAT_STATUS="Good"
     elif [[ $MAX_CAPACITY -ge 70 ]]; then
         BAT_ICON="🟡"
-        BAT_STATUS="Удовлетворительное"
+        BAT_STATUS="Fair"
     else
         BAT_ICON="🔴"
-        BAT_STATUS="Требуется замена"
+        BAT_STATUS="Replace Soon"
     fi
 
-    echo "$BAT_ICON Оценка:            $BAT_STATUS"
+    echo "$BAT_ICON Assessment:         $BAT_STATUS"
 
-    # Прогноз по циклам (Apple указывает ~1000 циклов для современных Mac)
+    # Cycle forecast (Apple specifies ~1000 cycles for modern Macs)
     CYCLES_REMAINING=$((1000 - CYCLES))
     if [[ $CYCLES_REMAINING -gt 0 ]]; then
-        echo "  Осталось циклов:  ~$CYCLES_REMAINING (из 1000)"
+        ESTIMATED_YEARS=$((CYCLES_REMAINING / 300))
+        echo "   Cycles Used:         $CYCLES / 1000"
+        echo "   Estimated Remaining: ~${ESTIMATED_YEARS} years"
     else
-        echo "  ⚠️ Превышен лимит циклов!"
+        echo "   Cycles Used:         $CYCLES (Battery may need replacement)"
     fi
-
-    [[ $MAX_CAPACITY -lt 80 ]] && echo "⚠️  ВНИМАНИЕ: Ёмкость ниже 80%. Рекомендуется замена батареи."
 else
-    echo "ℹ️  Батарея не обнаружена (десктоп Mac)"
+    echo "ℹ️  No battery detected (desktop Mac or battery unavailable)"
 fi
+
 echo ""
 
-# ═══════════════════════════════════════════════════════════
-# 4. ПАМЯТЬ (RAM)
-# ═══════════════════════════════════════════════════════════
-echo "🧠 ПАМЯТЬ (RAM)"
-echo $SUB_SEP
+# ═════════════════════════════════════════════════════════════
+# 4. MEMORY USAGE
+# ═════════════════════════════════════════════════════════════
 
-# Общий объем памяти
+echo "🧠 MEMORY USAGE"
+echo "$SUB_SEP"
+
+# Total memory
 TOTAL_MEM=$(sysctl -n hw.memsize)
 TOTAL_MEM_GB=$((TOTAL_MEM / 1073741824))
 
-# Статистика памяти через vm_stat
+# Memory statistics via vm_stat
 VM_STAT=$(vm_stat)
-PAGE_SIZE=$(vm_stat | head -1 | grep -o '[0-9]*')
+PAGE_SIZE=$(vm_stat 2>/dev/null | head -1 | grep -o '[0-9]*' | tail -1)
 
-PAGES_FREE=$(echo "$VM_STAT" | grep "Pages free" | awk '{print $3}' | tr -d '.')
+# Extract memory pages (values in thousands)
+PAGES_WIRED=$(echo "$VM_STAT" | grep "Pages wired down" | awk '{print $4}' | tr -d '.')
 PAGES_ACTIVE=$(echo "$VM_STAT" | grep "Pages active" | awk '{print $3}' | tr -d '.')
 PAGES_INACTIVE=$(echo "$VM_STAT" | grep "Pages inactive" | awk '{print $3}' | tr -d '.')
-PAGES_SPECULATIVE=$(echo "$VM_STAT" | grep "Pages speculative" | awk '{print $3}' | tr -d '.')
-PAGES_WIRED=$(echo "$VM_STAT" | grep "Pages wired" | awk '{print $4}' | tr -d '.')
-PAGES_COMPRESSED=$(echo "$VM_STAT" | grep "Pages occupied by compressor" | awk '{print $5}' | tr -d '.')
-SWAP_USED=$(sysctl -n vm.swapusage | awk '{print $6}')
+PAGES_FREE=$(echo "$VM_STAT" | grep "Pages free" | awk '{print $3}' | tr -d '.')
 
-FREE_MB=$(( (PAGES_FREE * PAGE_SIZE) / 1048576 ))
-ACTIVE_MB=$(( (PAGES_ACTIVE * PAGE_SIZE) / 1048576 ))
-INACTIVE_MB=$(( (PAGES_INACTIVE * PAGE_SIZE) / 1048576 ))
-WIRED_MB=$(( (PAGES_WIRED * PAGE_SIZE) / 1048576 ))
-COMPRESSED_MB=$(( (PAGES_COMPRESSED * PAGE_SIZE) / 1048576 ))
+# Convert to MB (pages * 4096 bytes / 1024 / 1024)
+WIRED_MB=$((PAGES_WIRED * 4096 / 1048576))
+ACTIVE_MB=$((PAGES_ACTIVE * 4096 / 1048576))
+INACTIVE_MB=$((PAGES_INACTIVE * 4096 / 1048576))
+FREE_MB=$((PAGES_FREE * 4096 / 1048576))
 
-USED_MB=$((ACTIVE_MB + WIRED_MB + COMPRESSED_MB))
+USED_MB=$((WIRED_MB + ACTIVE_MB))
 USED_PERCENT=$((USED_MB * 100 / (TOTAL_MEM_GB * 1024)))
 
-echo "Всего:              ${TOTAL_MEM_GB} GB"
+echo "Total:              ${TOTAL_MEM_GB} GB"
 echo ""
-echo "📊 Распределение:"
-echo "  Активная:         ${ACTIVE_MB} MB"
-echo "  Фиксированная:    ${WIRED_MB} MB"
-echo "  Сжатая:           ${COMPRESSED_MB} MB"
-echo "  Неактивная:       ${INACTIVE_MB} MB"
-echo "  Свободная:        ${FREE_MB} MB"
-echo "  Swap:             ${SWAP_USED}"
+echo "📊 Distribution:"
+echo "  Wired:            ${WIRED_MB} MB"
+echo "  Active:           ${ACTIVE_MB} MB"
+echo "  Inactive:         ${INACTIVE_MB} MB"
+echo "  Free:             ${FREE_MB} MB"
 echo ""
 
-if [[ $USED_PERCENT -le 70 ]]; then
+# Memory health assessment
+if [[ $USED_PERCENT -le 50 ]]; then
     MEM_ICON="🟢"
-elif [[ $USED_PERCENT -le 85 ]]; then
+    MEM_STATUS="Healthy"
+elif [[ $USED_PERCENT -le 80 ]]; then
     MEM_ICON="🟡"
+    MEM_STATUS="Moderate"
 else
     MEM_ICON="🔴"
+    MEM_STATUS="High"
 fi
 
-echo "$MEM_ICON Использовано:      ${USED_MB} MB (~${USED_PERCENT}%)"
+echo "$MEM_ICON Used:               ${USED_MB} MB (~${USED_PERCENT}%)"
 echo ""
 
-# ═══════════════════════════════════════════════════════════
-# 5. НАГРУЗКА CPU
-# ═══════════════════════════════════════════════════════════
-echo "⚡ НАГРУЗКА CPU"
-echo $SUB_SEP
+# ═════════════════════════════════════════════════════════════
+# 5. CPU LOAD
+# ═════════════════════════════════════════════════════════════
 
-# Количество ядер
+echo "⚡ CPU LOAD"
+echo "$SUB_SEP"
+
+# Core count
 CORES_PERF=$(sysctl -n hw.perflevel0.logicalcpu 2>/dev/null || echo "N/A")
 CORES_EFF=$(sysctl -n hw.perflevel1.logicalcpu 2>/dev/null || echo "N/A")
 CORES_TOTAL=$(sysctl -n hw.logicalcpu)
 
-echo "Ядер всего:         $CORES_TOTAL"
+echo "Total Cores:        $CORES_TOTAL"
 [[ "$CORES_PERF" != "N/A" ]] && echo "  Performance:      $CORES_PERF"
 [[ "$CORES_EFF" != "N/A" ]] && echo "  Efficiency:       $CORES_EFF"
+
+# Load average
+read LOAD_1 LOAD_5 LOAD_15 < <(uptime | grep -oE 'load average[s]?: [0-9.,]+, [0-9.,]+, [0-9.,]+' | awk -F': ' '{print $2}' | tr ',' ' ')
+
 echo ""
-
-# Load Average
-LOAD=$(sysctl -n vm.loadavg | awk '{print $2, $3, $4}')
-LOAD_1=$(echo $LOAD | awk '{print $1}' | tr ',' '.')
-LOAD_5=$(echo $LOAD | awk '{print $2}' | tr ',' '.')
-LOAD_15=$(echo $LOAD | awk '{print $3}' | tr ',' '.')
-
 echo "Load Average:"
-echo "  1 мин:            $LOAD_1"
-echo "  5 мин:            $LOAD_5"
-echo "  15 мин:           $LOAD_15"
+echo "  1 minute:         $LOAD_1"
+echo "  5 minutes:        $LOAD_5"
+echo "  15 minutes:       $LOAD_15"
 echo ""
 
-# Оценка нагрузки (берём целую часть)
+# Load assessment (take integer part)
 LOAD_INT=$(echo "$LOAD_1" | awk -F'[.,]' '{print $1}')
 if [[ $LOAD_INT -le $((CORES_TOTAL / 2)) ]]; then
     LOAD_ICON="🟢"
-    LOAD_STATUS="Низкая"
+    LOAD_STATUS="Low"
 elif [[ $LOAD_INT -le $CORES_TOTAL ]]; then
     LOAD_ICON="🟡"
-    LOAD_STATUS="Умеренная"
+    LOAD_STATUS="Moderate"
 else
     LOAD_ICON="🔴"
-    LOAD_STATUS="Высокая"
+    LOAD_STATUS="High"
 fi
 
-echo "$LOAD_ICON Нагрузка:          $LOAD_STATUS"
+echo "$LOAD_ICON Load Status:       $LOAD_STATUS"
 
-# Топ процессов по CPU
+# Top 5 processes by CPU
 echo ""
-echo "📊 Топ-5 процессов по CPU:"
+echo "📊 Top 5 Processes by CPU:"
 ps aux | sort -nrk 3,3 | head -6 | tail -5 | awk '{printf "  %-6s %5.1f%%  %s\n", $2, $3, $11}'
 echo ""
 
-# ═══════════════════════════════════════════════════════════
-# 6. ТЕМПЕРАТУРА (если доступно)
-# ═══════════════════════════════════════════════════════════
-echo "🌡️  ТЕМПЕРАТУРА"
-echo $SUB_SEP
+# ═════════════════════════════════════════════════════════════
+# 6. TEMPERATURE (if available)
+# ═════════════════════════════════════════════════════════════
+
+echo "🌡️  TEMPERATURE"
+echo "$SUB_SEP"
 
 if command -v osx-cpu-temp &> /dev/null; then
-    CPU_TEMP=$(osx-cpu-temp)
-    echo "CPU:                $CPU_TEMP"
+    TEMP=$(osx-cpu-temp 2>/dev/null)
+    echo "CPU Temperature:    $TEMP"
 elif command -v istats &> /dev/null; then
     istats cpu temp 2>/dev/null
 else
-    # Пробуем через powermetrics (требует sudo)
-    echo "ℹ️  Для мониторинга температуры установите:"
+    echo "ℹ️  To monitor temperature install:"
     echo "   brew install osx-cpu-temp"
-    echo "   или: gem install iStats"
 fi
+
 echo ""
 
-# ═══════════════════════════════════════════════════════════
-# 7. СЕТЬ
-# ═══════════════════════════════════════════════════════════
-echo "🌐 СЕТЬ"
-echo $SUB_SEP
+# ═════════════════════════════════════════════════════════════
+# 7. NETWORK
+# ═════════════════════════════════════════════════════════════
 
-# Активный интерфейс
+echo "🌐 NETWORK"
+echo "$SUB_SEP"
+
+# Active interface
 ACTIVE_IF=$(route get default 2>/dev/null | grep interface | awk '{print $2}')
 if [[ -n "$ACTIVE_IF" ]]; then
     IP_LOCAL=$(ipconfig getifaddr $ACTIVE_IF 2>/dev/null)
-    echo "Интерфейс:          $ACTIVE_IF"
-    echo "Локальный IP:       $IP_LOCAL"
+    echo "Interface:          $ACTIVE_IF"
+    echo "Local IP:           $IP_LOCAL"
 fi
 
-# Внешний IP (быстрый запрос)
+# External IP (fast request with timeout)
 EXTERNAL_IP=$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo "N/A")
-echo "Внешний IP:         $EXTERNAL_IP"
-
-# DNS
-DNS_SERVERS=$(scutil --dns | grep "nameserver\[[0-9]*\]" | head -3 | awk '{print $3}' | tr '\n' ' ')
-echo "DNS:                $DNS_SERVERS"
+echo "External IP:        $EXTERNAL_IP"
 echo ""
 
-# ═══════════════════════════════════════════════════════════
-# 8. БЕЗОПАСНОСТЬ
-# ═══════════════════════════════════════════════════════════
-echo "🔐 БЕЗОПАСНОСТЬ"
-echo $SUB_SEP
+# ═════════════════════════════════════════════════════════════
+# 8. SECURITY STATUS
+# ═════════════════════════════════════════════════════════════
 
-# FileVault
-FV_STATUS=$(fdesetup status 2>/dev/null | head -1)
-echo "FileVault:          $FV_STATUS"
+echo "🔒 SECURITY STATUS"
+echo "$SUB_SEP"
 
-# Firewall
-FW_STATUS=$(defaults read /Library/Preferences/com.apple.alf globalstate 2>/dev/null)
-case $FW_STATUS in
-    0) FW_TEXT="Выключен" ;;
-    1) FW_TEXT="Включен" ;;
-    2) FW_TEXT="Включен (блокировка входящих)" ;;
-    *) FW_TEXT="Неизвестно" ;;
+# Firewall status
+FIREWALL_STATUS=$(defaults read /Library/Preferences/com.apple.alf globalstate 2>/dev/null)
+case "$FIREWALL_STATUS" in
+    0)
+        FIREWALL_ICON="🔴"
+        FIREWALL_TEXT="Disabled"
+        ;;
+    1)
+        FIREWALL_ICON="🟢"
+        FIREWALL_TEXT="Enabled (specific apps)"
+        ;;
+    2)
+        FIREWALL_ICON="🟢"
+        FIREWALL_TEXT="Enabled (all apps blocked)"
+        ;;
+    *)
+        FIREWALL_ICON="⚪"
+        FIREWALL_TEXT="Unknown"
+        ;;
 esac
-echo "Firewall:           $FW_TEXT"
+echo "$FIREWALL_ICON Firewall:         $FIREWALL_TEXT"
 
-# SIP
-SIP_STATUS=$(csrutil status 2>/dev/null | awk -F': ' '{print $2}' | tr -d '.')
-echo "SIP:                $SIP_STATUS"
-
-# Gatekeeper
-GK_STATUS=$(spctl --status 2>/dev/null)
-echo "Gatekeeper:         $GK_STATUS"
-echo ""
-
-# ═══════════════════════════════════════════════════════════
-# ИТОГОВАЯ СВОДКА
-# ═══════════════════════════════════════════════════════════
-echo $LOG_SEP
-echo "📋 ИТОГОВАЯ СВОДКА"
-echo $SUB_SEP
-
-# Формируем краткий отчет
-ISSUES=0
-WARNINGS=""
-
-# Проверка SSD
-if [[ -n "$PERCENT_USED" && $PERCENT_USED -gt 80 ]]; then
-    WARNINGS="${WARNINGS}\n  🔴 SSD износ критический: ${PERCENT_USED}%"
-    ((ISSUES++))
-elif [[ -n "$PERCENT_USED" && $PERCENT_USED -gt 50 ]]; then
-    WARNINGS="${WARNINGS}\n  🟡 SSD износ умеренный: ${PERCENT_USED}%"
-fi
-
-# Проверка батареи
-if [[ -n "$MAX_CAPACITY" && $MAX_CAPACITY -lt 80 ]]; then
-    WARNINGS="${WARNINGS}\n  🔴 Батарея требует замены: ${MAX_CAPACITY}%"
-    ((ISSUES++))
-elif [[ -n "$MAX_CAPACITY" && $MAX_CAPACITY -lt 90 ]]; then
-    WARNINGS="${WARNINGS}\n  🟡 Батарея изношена: ${MAX_CAPACITY}%"
-fi
-
-# Проверка памяти
-if [[ $USED_PERCENT -gt 85 ]]; then
-    WARNINGS="${WARNINGS}\n  🔴 Высокое использование RAM: ${USED_PERCENT}%"
-    ((ISSUES++))
-fi
-
-# Проверка нагрузки
-if [[ $LOAD_INT -gt $CORES_TOTAL ]]; then
-    WARNINGS="${WARNINGS}\n  🟡 Высокая нагрузка CPU: $LOAD_1"
-fi
-
-if [[ $ISSUES -eq 0 ]]; then
-    echo "✅ Система в хорошем состоянии"
+# FileVault status
+FILEVAULT_STATUS=$(fdesetup status 2>/dev/null | grep -o "On\|Off")
+if [ "$FILEVAULT_STATUS" = "On" ]; then
+    FILEVAULT_ICON="🟢"
 else
-    echo "⚠️  Обнаружены проблемы ($ISSUES):"
-    echo -e "$WARNINGS"
+    FILEVAULT_ICON="🔴"
 fi
+echo "$FILEVAULT_ICON FileVault:        $FILEVAULT_STATUS"
 
-echo ""
-echo "SSD:     ${PERCENT_USED:-N/A}% износа | Батарея: ${MAX_CAPACITY:-N/A}% ёмкости"
-echo "RAM:     ${USED_PERCENT}% использовано | CPU Load: $LOAD_1"
-echo ""
-
-# ═══════════════════════════════════════════════════════════
-# УВЕДОМЛЕНИЕ
-# ═══════════════════════════════════════════════════════════
-END_DATE=$(date "+%H:%M:%S")
-MESSAGE="SSD: ${PERCENT_USED:-N/A}% | Батарея: ${MAX_CAPACITY:-N/A}% | RAM: ${USED_PERCENT}%"
-
-if [[ $ISSUES -gt 0 ]]; then
-    TITLE="⚠️ Health Check - Есть проблемы"
+# System Integrity Protection (SIP)
+SIP_STATUS=$(csrutil status | grep -o "enabled\|disabled")
+if [ "$SIP_STATUS" = "enabled" ]; then
+    SIP_ICON="🟢"
 else
-    TITLE="✅ Health Check - OK"
+    SIP_ICON="🔴"
+fi
+echo "$SIP_ICON System Integrity:   $SIP_STATUS"
+
+echo ""
+
+# ═════════════════════════════════════════════════════════════
+# SUMMARY AND NOTIFICATION
+# ═════════════════════════════════════════════════════════════
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "✅ System health report completed at $(date "+%H:%M:%S")"
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
+
+# Prepare notification message
+if [ -z "$MESSAGE" ]; then
+    MESSAGE="SSD: ${PERCENT_USED:-N/A}% | Battery: ${MAX_CAPACITY:-N/A}% | RAM: ${USED_PERCENT}% | CPU: $LOAD_STATUS"
 fi
 
-osascript -e "display notification \"$MESSAGE\" with title \"fuck cleanmymac: Health Check\" subtitle \"Завершено в $END_DATE\"" 2>/dev/null
+# Show notification if osascript is available
+if command -v osascript &> /dev/null; then
+    # Escape special characters for AppleScript
+    MESSAGE=$(printf '%s\n' "$MESSAGE" | sed 's/"/\\"/g; s/\\/\\\\/g')
+    TITLE=$(printf '%s\n' "$TITLE" | sed 's/"/\\"/g; s/\\/\\\\/g')
 
-echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║       ПРОВЕРКА ЗАВЕРШЕНА: $END_DATE                         ║"
-echo "╚══════════════════════════════════════════════════════════════╝"
+    osascript -e "display notification \"$MESSAGE\" with title \"$TITLE\"" 2>/dev/null || true
+fi
