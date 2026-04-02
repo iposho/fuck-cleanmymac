@@ -71,7 +71,7 @@ echo ""
 # 3. NPM GLOBAL PACKAGES
 if command -v npm &> /dev/null; then
     echo "📦 Checking npm global packages..."
-    NPM_OUTDATED=$(npm outdated -g 2>/dev/null | tail -n +2 | wc -l | xargs || echo "0")
+    NPM_OUTDATED=$({ npm outdated -g 2>/dev/null || true; } | tail -n +2 | wc -l | tr -d '[:space:]')
 
     if [ "$NPM_OUTDATED" -gt 0 ]; then
         echo "   Updates available: $NPM_OUTDATED"
@@ -92,7 +92,7 @@ echo ""
 # 4. PNPM GLOBAL PACKAGES (if installed)
 if command -v pnpm &> /dev/null; then
     echo "📦 Checking pnpm global packages..."
-    PNPM_OUTDATED=$(pnpm outdated -g 2>/dev/null | tail -n +2 | wc -l | xargs || echo "0")
+    PNPM_OUTDATED=$({ pnpm outdated -g 2>/dev/null || true; } | tail -n +2 | wc -l | tr -d '[:space:]')
 
     if [ "$PNPM_OUTDATED" -gt 0 ]; then
         echo "   Updates available: $PNPM_OUTDATED"
@@ -112,7 +112,7 @@ echo ""
 
 # 5. MACOS SYSTEM UPDATES
 echo "🍎 Checking macOS system updates..."
-SYSTEM_UPDATES=$(softwareupdate -l 2>/dev/null | grep "^   \*" | wc -l | xargs || echo "0")
+SYSTEM_UPDATES=$({ softwareupdate -l 2>/dev/null || true; } | { grep "^   \*" || true; } | wc -l | tr -d '[:space:]')
 
 if [ "$SYSTEM_UPDATES" -gt 0 ]; then
     echo "   Updates available: $SYSTEM_UPDATES"
