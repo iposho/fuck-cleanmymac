@@ -394,7 +394,7 @@ main() {
         fi
 
         # Telegram media cache
-        for tg_dir in ~/Library/Group\ Containers/*.ru.keepcoder.Telegram 2>/dev/null; do
+        for tg_dir in ~/Library/Group\ Containers/*.ru.keepcoder.Telegram; do
             if [ -d "$tg_dir" ]; then
                 for account_dir in "$tg_dir"/account-*; do
                     if [ -d "$account_dir/postbox/media" ]; then
