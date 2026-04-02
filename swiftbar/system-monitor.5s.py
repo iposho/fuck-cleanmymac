@@ -168,3 +168,77 @@ try:
 
 except Exception:
     print("Error retrieving process list | color=red size=10")
+
+print("---")
+
+# Logs section
+LOG_DIR = Path.home() / ".scripts" / "logs"
+
+def get_last_cleaner_log():
+    if not LOG_DIR.exists():
+        return None, None
+    logs = sorted(LOG_DIR.glob("cleaner_*.log"), reverse=True)
+    if not logs:
+        # Fallback to cleaner.log
+        fallback = LOG_DIR / "cleaner.log"
+        if fallback.exists():
+            return fallback, fallback.stat().st_mtime
+        return None, None
+    return logs[0], logs[0].stat().st_mtime
+
+def get_update_log():
+    log = LOG_DIR / "update.log"
+    if log.exists():
+        return log, log.stat().st_mtime
+    return None, None
+
+def format_log_time(mtime):
+    import datetime
+    dt = datetime.datetime.fromtimestamp(mtime)
+    now = datetime.datetime.now()
+    delta = now - dt
+    if delta.days == 0:
+        return dt.strftime("сегодня %H:%M")
+    elif delta.days == 1:
+        return "вчера"
+    else:
+        return dt.strftime("%d.%m.%Y")
+
+def extract_log_summary(log_path, max_lines=6):
+    """Extract summary block (ИТОГО section) from a log file."""
+    try:
+        text = log_path.read_text(errors="replace")
+        lines = [l.rstrip() for l in text.splitlines() if l.strip()]
+        # Find the ИТОГО block (summary at end of log)
+        summary_start = -1
+        for i, line in enumerate(lines):
+            if "ИТОГО" in line:
+                summary_start = i
+        if summary_start >= 0:
+            return lines[summary_start : summary_start + max_lines]
+        # Fallback: last lines
+        return lines[-max_lines:]
+    except Exception:
+        return []
+
+cleaner_log, cleaner_mtime = get_last_cleaner_log()
+update_log, update_mtime = get_update_log()
+
+if cleaner_log:
+    time_str = format_log_time(cleaner_mtime)
+    print(f"📋 Лог очистки ({time_str})")
+    for line in extract_log_summary(cleaner_log):
+        # Strip emoji for cleaner display in menu
+        print(f"  {line} | font=AndaleMono size=10 color=white")
+    print(f"  ─── открыть файл | shell=open param1={cleaner_log} terminal=false")
+else:
+    print("📋 Лог очистки: нет данных | color=gray")
+
+if update_log:
+    time_str = format_log_time(update_mtime)
+    print(f"🔄 Лог обновлений ({time_str})")
+    for line in extract_log_summary(update_log):
+        print(f"  {line} | font=AndaleMono size=10 color=white")
+    print(f"  ─── открыть файл | shell=open param1={update_log} terminal=false")
+else:
+    print("🔄 Лог обновлений: нет данных | color=gray")
