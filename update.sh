@@ -89,7 +89,7 @@ if command -v npm &> /dev/null; then
             echo "   • $pkg: $current → $latest"
         done
         echo "   Updating..."
-        if npm update -g 2>&1 | sed 's/^/   /'; then
+        if sudo npm update -g 2>&1 | grep -v 'npm WARN EBADENGINE' | sed 's/^/   /'; then
             echo "✅ npm global packages updated"
             UPDATES_INSTALLED=$((UPDATES_INSTALLED + NPM_OUTDATED))
         else
@@ -155,8 +155,8 @@ END_SEC=$(date +%s)
 RUNTIME=$((END_SEC - START_SEC))
 
 echo "📊 ИТОГО:"
-echo "✅ Brew пакетов обновлено: $UPDATES_INSTALLED"
-echo "✅ App Store обновлено: 0"
+echo "✅ Пакетов обновлено: $UPDATES_INSTALLED"
+echo "✅ Системных обновлений доступно: $SYSTEM_UPDATES"
 echo "✅ Время работы: $RUNTIME сек."
 echo "=== ЗАВЕРШЕНО [$(date "+%H:%M:%S")] ==="
 echo "$LOG_SEP"
