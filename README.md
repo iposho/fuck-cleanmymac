@@ -11,7 +11,7 @@ A comprehensive macOS system cleaner and health monitor toolkit designed to safe
 - **Dry-run mode** (`--dry-run`) - preview what will be deleted without actually deleting
 - **Docker cleanup** - removes unused containers, images, and volumes
 - **Package manager caches** - cleans npm, yarn, Homebrew, pip, gem caches
-- **Application caches** - targets Cursor, Notion, Slack, Telegram, JetBrains IDEs
+- **Application caches** - targets Cursor, Notion, Slack, Telegram, Spotify, JetBrains IDEs
 - **System maintenance** - cleans user caches, logs, and trash
 - **Logging** - timestamped logs with automatic rotation (90 days retention)
 - **Notifications** - displays system notifications when cleanup completes
@@ -35,8 +35,9 @@ A comprehensive macOS system cleaner and health monitor toolkit designed to safe
 - **Safe execution** - error handling and notifications
 
 ### 📊 **SwiftBar Plugin**
-- Real-time system monitoring in macOS menu bar
-- Quick access to cleaning and health check functions
+- Real-time system monitoring in macOS menu bar (CPU, RAM, disk)
+- Quick access to cleaning, update, and health check functions
+- Collapsible submenus for network processes and operation logs
 - Automatic refresh (configurable interval)
 
 ## Installation
@@ -232,6 +233,7 @@ crontab -e
 ### Path Validation
 - Prevents deletion outside user's home directory and `/Users/<user>`
 - Blocks dangerous system paths: `/`, `/System`, `/usr`, `/bin`, `/sbin`, `/etc`, `/private`
+- Explicitly allows system temp directories (`/tmp`, `/var/tmp`) for safe cleanup
 - Validates all paths before deletion
 
 ### Dry-run Mode

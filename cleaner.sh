@@ -147,12 +147,20 @@ validate_path() {
 
     # Resolve symlinks and canonicalize the path if possible
     if command -v realpath >/dev/null 2>&1; then
-        expanded=$(realpath -m "$expanded" 2>/dev/null || printf "%s" "$expanded")
+        # On macOS, realpath doesn't support -m. We try without it.
+        expanded=$(realpath "$expanded" 2>/dev/null || printf "%s" "$expanded")
     elif command -v readlink >/dev/null 2>&1; then
         expanded=$(readlink -f "$expanded" 2>/dev/null || printf "%s" "$expanded")
     fi
 
-    # Disallow trivially dangerous targets
+    # Allow system temporary directories explicitly
+    case "$expanded" in
+        "/tmp"*|"/var/tmp"*|"/private/tmp"*|"/private/var/tmp"* )
+            return 0
+            ;;
+    esac
+
+    # Disallow other dangerous targets
     case "$expanded" in
         "/"|"/System"*|"/usr"*|"/bin"*|"/sbin"*|"/etc"*|"/private"* )
             debug_log "Path rejected (system path): $expanded"
@@ -238,7 +246,12 @@ safe_clean() {
                 if rm -rf "$expanded"/* 2>/dev/null; then
                     log "✅ $description cleaned ($expanded)"
                 else
-                    log "❌ Failed to clean $description ($expanded)"
+                    # For system temp directories, naturally some files will be unremovable without sudo
+                    if [[ "$expanded" == "/tmp"* || "$expanded" == "/var/tmp"* || "$expanded" == "/private/tmp"* || "$expanded" == "/private/var/tmp"* ]]; then
+                        log "✅ $description cleaned (best-effort, skipped system-locked files)"
+                    else
+                        log "❌ Failed to clean $description ($expanded)"
+                    fi
                 fi
             fi
         else
@@ -318,10 +331,16 @@ main() {
             if [ "$DRY_RUN" = true ]; then
                 log "🏜  [DRY-RUN] Would clean npm cache"
             else
-                if npm cache clean --force > /dev/null 2>&1; then
-                    log "✅ npm cache cleaned"
+                if command -v npm &> /dev/null; then
+                    if npm cache clean --force > /dev/null 2>&1; then
+                        log "✅ npm cache cleaned (via npm CLI)"
+                    else
+                        log "⚠️  npm cache clean failed, falling back to manual removal"
+                        safe_clean ~/.npm "npm cache"
+                    fi
                 else
-                    log "❌ Failed to clean npm cache"
+                    log "⚠️  npm command not found, performing manual cache removal"
+                    safe_clean ~/.npm "npm cache"
                 fi
             fi
         fi
@@ -384,6 +403,10 @@ main() {
         # Cursor
         safe_clean ~/Library/Application\ Support/Cursor/Cache "Cursor Cache"
 
+        # Spotify
+        safe_clean ~/Library/Caches/com.spotify.client "Spotify Cache"
+        safe_clean ~/Library/Application\ Support/Spotify/PersistentCache "Spotify Persistent Cache"
+
         # Notion
         safe_clean ~/Library/Application\ Support/Notion/Cache "Notion Cache"
 
@@ -417,12 +440,10 @@ main() {
         fi
     fi
 
-    # Browser caches (optional, commented by default)
+    # Browser caches (optional)
     if [ "$CLEAN_BROWSER_CACHES" = true ]; then
-        # Uncomment to enable
-        # safe_clean ~/Library/Application\ Support/Google/Chrome/Default/Cache "Chrome Cache"
+        safe_clean ~/Library/Application\ Support/Google/Chrome/Default/Cache "Chrome Cache"
         # safe_clean ~/Library/Safari/History.db-wal "Safari History Cache"
-        :
     fi
 
     log "$LOG_SEP"
@@ -444,8 +465,8 @@ main() {
 
         # Temp files
         if [ "$CLEAN_TEMP_FILES" = true ]; then
-            safe_clean /tmp "Temporary files (/tmp)"
-            safe_clean /var/tmp "Temporary files (/var/tmp)"
+            safe_clean /tmp/ "Temporary files (/tmp)"
+            safe_clean /var/tmp/ "Temporary files (/var/tmp)"
         fi
     fi
 

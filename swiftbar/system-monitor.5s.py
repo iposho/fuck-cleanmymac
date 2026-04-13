@@ -137,7 +137,7 @@ print(
 
 print("---")
 
-# Processes section
+# Processes section (submenu)
 
 # Get list of processes with open network connections
 try:
@@ -157,21 +157,19 @@ try:
                 processes[pid] = (proc_name, pid)
 
     if processes:
-        print(f"⚔️  Processes ({len(processes)})")
+        print(f"⚔️  Процессы ({len(processes)})")
         for proc_name, pid in sorted(processes.values()):
             script_path = sys.argv[0]
             print(
-                f"  {proc_name}:{pid} | font=AndaleMono bash={script_path} param1=kill param2={pid} terminal=false refresh=true"
+                f"--{proc_name}:{pid} | font=AndaleMono bash={script_path} param1=kill param2={pid} terminal=false refresh=true"
             )
     else:
-        print("⚔️  Processes: none active")
+        print("⚔️  Процессы: нет активных")
 
 except Exception:
-    print("Error retrieving process list | color=red size=10")
+    print("⚔️  Процессы: ошибка | color=red size=10")
 
-print("---")
-
-# Logs section
+# Logs section (submenu)
 LOG_DIR = Path.home() / ".scripts" / "logs"
 
 def get_last_cleaner_log():
@@ -224,21 +222,26 @@ def extract_log_summary(log_path, max_lines=6):
 cleaner_log, cleaner_mtime = get_last_cleaner_log()
 update_log, update_mtime = get_update_log()
 
+print("📋 Логи")
+
 if cleaner_log:
     time_str = format_log_time(cleaner_mtime)
-    print(f"📋 Лог очистки ({time_str})")
+    print(f"--🧹 Очистка ({time_str})")
     for line in extract_log_summary(cleaner_log):
-        # Strip emoji for cleaner display in menu
-        print(f"  {line} | font=AndaleMono size=10 color=white")
-    print(f"  ─── открыть файл | shell=open param1={cleaner_log} terminal=false")
+        safe_line = line.replace("|", "∣")
+        print(f"--{safe_line} | font=AndaleMono size=10 color=white")
+    print(f"--─── открыть файл | shell=open param1={cleaner_log} terminal=false")
 else:
-    print("📋 Лог очистки: нет данных | color=gray")
+    print("--🧹 Очистка: нет данных | color=gray")
+
+print("-----")
 
 if update_log:
     time_str = format_log_time(update_mtime)
-    print(f"🔄 Лог обновлений ({time_str})")
+    print(f"--🚀 Обновления ({time_str})")
     for line in extract_log_summary(update_log):
-        print(f"  {line} | font=AndaleMono size=10 color=white")
-    print(f"  ─── открыть файл | shell=open param1={update_log} terminal=false")
+        safe_line = line.replace("|", "∣")
+        print(f"--{safe_line} | font=AndaleMono size=10 color=white")
+    print(f"--─── открыть файл | shell=open param1={update_log} terminal=false")
 else:
-    print("🔄 Лог обновлений: нет данных | color=gray")
+    print("--🚀 Обновления: нет данных | color=gray")
