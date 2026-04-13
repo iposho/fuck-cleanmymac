@@ -154,11 +154,11 @@ echo "$LOG_SEP"
 END_SEC=$(date +%s)
 RUNTIME=$((END_SEC - START_SEC))
 
-echo "📊 ИТОГО:"
-echo "✅ Пакетов обновлено: $UPDATES_INSTALLED"
-echo "✅ Системных обновлений доступно: $SYSTEM_UPDATES"
-echo "✅ Время работы: $RUNTIME сек."
-echo "=== ЗАВЕРШЕНО [$(date "+%H:%M:%S")] ==="
+echo "📊 SUMMARY:"
+echo "✅ Packages updated: $UPDATES_INSTALLED"
+echo "✅ System updates available: $SYSTEM_UPDATES"
+echo "⏱️  Runtime: $RUNTIME seconds"
+echo "=== COMPLETED [$(date "+%H:%M:%S")] ==="
 echo "$LOG_SEP"
 echo ""
 

@@ -157,35 +157,31 @@ try:
                 processes[pid] = (proc_name, pid)
 
     if processes:
-        print(f"⚔️  Процессы ({len(processes)})")
+        print(f"⚔️  Processes ({len(processes)})")
         for proc_name, pid in sorted(processes.values()):
             script_path = sys.argv[0]
             print(
                 f"--{proc_name}:{pid} | font=AndaleMono bash={script_path} param1=kill param2={pid} terminal=false refresh=true"
             )
     else:
-        print("⚔️  Процессы: нет активных")
+        print("⚔️  Processes: none active")
 
 except Exception:
-    print("⚔️  Процессы: ошибка | color=red size=10")
+    print("⚔️  Processes: error | color=red size=10")
 
 # Logs section (submenu)
 LOG_DIR = Path.home() / ".scripts" / "logs"
 
-def get_last_cleaner_log():
+def get_last_log(pattern):
     if not LOG_DIR.exists():
         return None, None
-    logs = sorted(LOG_DIR.glob("cleaner_*.log"), reverse=True)
+    logs = sorted(LOG_DIR.glob(pattern), reverse=True)
     if not logs:
-        # Fallback to cleaner.log
-        fallback = LOG_DIR / "cleaner.log"
-        if fallback.exists():
-            return fallback, fallback.stat().st_mtime
         return None, None
     return logs[0], logs[0].stat().st_mtime
 
-def get_update_log():
-    log = LOG_DIR / "update.log"
+def get_single_log(name):
+    log = LOG_DIR / name
     if log.exists():
         return log, log.stat().st_mtime
     return None, None
@@ -196,52 +192,45 @@ def format_log_time(mtime):
     now = datetime.datetime.now()
     delta = now - dt
     if delta.days == 0:
-        return dt.strftime("сегодня %H:%M")
+        return dt.strftime("today %H:%M")
     elif delta.days == 1:
-        return "вчера"
+        return "yesterday"
     else:
         return dt.strftime("%d.%m.%Y")
 
 def extract_log_summary(log_path, max_lines=6):
-    """Extract summary block (ИТОГО section) from a log file."""
+    """Extract summary block (SUMMARY/ИТОГО section) from a log file."""
     try:
         text = log_path.read_text(errors="replace")
         lines = [l.rstrip() for l in text.splitlines() if l.strip()]
-        # Find the ИТОГО block (summary at end of log)
         summary_start = -1
         for i, line in enumerate(lines):
-            if "ИТОГО" in line:
+            if "SUMMARY" in line or "ИТОГО" in line:
                 summary_start = i
         if summary_start >= 0:
             return lines[summary_start : summary_start + max_lines]
-        # Fallback: last lines
         return lines[-max_lines:]
     except Exception:
         return []
 
-cleaner_log, cleaner_mtime = get_last_cleaner_log()
-update_log, update_mtime = get_update_log()
+def print_log_block(label, log_path, mtime):
+    if log_path:
+        time_str = format_log_time(mtime)
+        print(f"--{label} ({time_str})")
+        for line in extract_log_summary(log_path):
+            safe_line = line.replace("|", "∣")
+            print(f"--{safe_line} | font=AndaleMono size=10 color=white")
+        print(f"--─── open file | shell=open param1={log_path} terminal=false")
+    else:
+        print(f"--{label}: no data | color=gray")
 
-print("📋 Логи")
+cleaner_log, cleaner_mtime = get_last_log("cleaner_*.log")
+update_log, update_mtime = get_single_log("update.log")
+health_log, health_mtime = get_single_log("health.log")
 
-if cleaner_log:
-    time_str = format_log_time(cleaner_mtime)
-    print(f"--🧹 Очистка ({time_str})")
-    for line in extract_log_summary(cleaner_log):
-        safe_line = line.replace("|", "∣")
-        print(f"--{safe_line} | font=AndaleMono size=10 color=white")
-    print(f"--─── открыть файл | shell=open param1={cleaner_log} terminal=false")
-else:
-    print("--🧹 Очистка: нет данных | color=gray")
-
+print("📋 Logs")
+print_log_block("🧹 Cleanup", cleaner_log, cleaner_mtime)
 print("-----")
-
-if update_log:
-    time_str = format_log_time(update_mtime)
-    print(f"--🚀 Обновления ({time_str})")
-    for line in extract_log_summary(update_log):
-        safe_line = line.replace("|", "∣")
-        print(f"--{safe_line} | font=AndaleMono size=10 color=white")
-    print(f"--─── открыть файл | shell=open param1={update_log} terminal=false")
-else:
-    print("--🚀 Обновления: нет данных | color=gray")
+print_log_block("🚀 Update", update_log, update_mtime)
+print("-----")
+print_log_block("🩺 Health", health_log, health_mtime)

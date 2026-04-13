@@ -490,7 +490,7 @@ main() {
     END_SEC=$(date +%s)
     RUNTIME=$((END_SEC - START_SEC))
 
-    log "📊 SUMMARY"
+    log "📊 SUMMARY:"
     if [ "$DRY_RUN" = true ]; then
         log "🏜  DRY-RUN: No files were actually deleted"
         log "⏱️  Scan time: $RUNTIME seconds"
