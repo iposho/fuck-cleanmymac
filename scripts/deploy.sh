@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALL_DIR="$HOME/.scripts/fuck-cleanmymac"
 
 if [ ! -d "$INSTALL_DIR/.git" ]; then
@@ -16,12 +16,22 @@ fi
 # Optionally push to GitHub first
 if [[ "${1:-}" == "--push" ]]; then
     echo "📤 Pushing to GitHub..."
-    git -C "$REPO_DIR" push origin main
+    if ! git -C "$REPO_DIR" push origin main; then
+        echo "❌ Push failed"
+        exit 1
+    fi
 fi
 
 # Pull changes in installed copy
 echo "📥 Updating installed copy..."
-git -C "$INSTALL_DIR" pull origin main
+if ! git -C "$INSTALL_DIR" fetch origin; then
+    echo "❌ Fetch failed — check network connection"
+    exit 1
+fi
+if ! git -C "$INSTALL_DIR" reset --hard origin/main; then
+    echo "❌ Reset failed"
+    exit 1
+fi
 
 # Verify symlinks
 echo ""

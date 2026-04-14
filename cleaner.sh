@@ -141,9 +141,9 @@ validate_path() {
         return 1
     fi
 
-    # Expand ~ and variables
+    # Expand ~ to $HOME (without eval for safety)
     local expanded
-    expanded=$(eval echo "$raw")
+    expanded="${raw/#\~/$HOME}"
 
     # Resolve symlinks and canonicalize the path if possible
     if command -v realpath >/dev/null 2>&1; then
@@ -153,9 +153,9 @@ validate_path() {
         expanded=$(readlink -f "$expanded" 2>/dev/null || printf "%s" "$expanded")
     fi
 
-    # Allow system temporary directories explicitly
+    # Allow system temporary directories explicitly (exact match or subpaths only)
     case "$expanded" in
-        "/tmp"*|"/var/tmp"*|"/private/tmp"*|"/private/var/tmp"* )
+        "/tmp"|"/tmp/"*|"/var/tmp"|"/var/tmp/"*|"/private/tmp"|"/private/tmp/"*|"/private/var/tmp"|"/private/var/tmp/"* )
             return 0
             ;;
     esac

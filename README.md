@@ -40,6 +40,8 @@ A comprehensive macOS system cleaner and health monitor toolkit designed to safe
 - Collapsible submenus for network processes and operation logs
 - Automatic refresh (configurable interval)
 
+**[📊 Detailed SwiftBar Guide](swiftbar/README.md)**
+
 ## Installation
 
 ### Automatic Installation (Recommended)
@@ -48,7 +50,7 @@ The easiest way to install **fuck-cleanmymac** on macOS is using the auto-instal
 
 #### One-liner Installation
 ```bash
-curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/scripts/install.sh | bash
 ```
 
 This single command will:
@@ -61,22 +63,22 @@ This single command will:
 - ✅ Optionally set up automatic weekly cleanup via cron
 - ✅ Optionally install SwiftBar menu bar plugin
 
+> [!TIP]
+> **[🛠 Detailed Setup & Deployment Guide](scripts/README.md)**  
+> See the `scripts` documentation for all installation flags and deployment workflows.
+
 #### Non-Interactive Installation
 If you prefer to skip interactive prompts, you can specify options:
 
 ```bash
-./install.sh --skip-deps --skip-cron --skip-swiftbar
+./scripts/install.sh --skip-deps --skip-cron --skip-swiftbar
 ```
 
-#### Available Installation Options
 ```bash
-./install.sh                    # Interactive installation (recommended)
-./install.sh --skip-deps        # Skip optional dependency installation
-./install.sh --skip-cron        # Skip cron job setup
-./install.sh --skip-swiftbar    # Skip SwiftBar plugin installation
-./install.sh --uninstall        # Remove installation completely
-./install.sh --help             # Show all available options
+./scripts/install.sh --help             # Show all available options
 ```
+
+See [scripts/README.md](scripts/README.md) for a full breakdown of installation and uninstallation options.
 
 #### After Installation
 Once installed, you can use the scripts from anywhere:
@@ -97,8 +99,25 @@ git pull origin main
 
 Or reinstall:
 ```bash
-curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/scripts/install.sh | bash
 ```
+
+### Uninstallation
+
+If you want to remove the toolkit and all its components (symlinks, cron jobs, etc.), use the uninstallation script:
+
+#### Using the dedicated script
+```bash
+./scripts/uninstall.sh
+```
+
+#### Using the installation script flag
+```bash
+./scripts/install.sh --uninstall
+```
+
+> [!NOTE]
+> The uninstaller will ask for confirmation before deleting logs and configuration files.
 
 ---
 
@@ -121,14 +140,7 @@ export PATH="$HOME/.scripts:$PATH"
 ```
 
 #### 3. SwiftBar Plugin (Optional)
-```bash
-# Create plugins directory if it doesn't exist
-mkdir -p ~/Library/Application\ Support/SwiftBar/Plugins
-
-# Copy the plugin
-cp swiftbar/system-monitor.5s.py ~/Library/Application\ Support/SwiftBar/Plugins/
-chmod +x ~/Library/Application\ Support/SwiftBar/Plugins/system-monitor.5s.py
-```
+See [swiftbar/README.md](swiftbar/README.md) for manual installation instructions and feature details.
 
 ## Usage
 
@@ -182,21 +194,17 @@ cp cleaner.conf ~/.config/fuck-cleanmymac/cleaner.conf
 Edit the config file to customize:
 - **LOG_DIR** - directory for log files (default: `~/.scripts/logs`)
 - **LOG_RETENTION_DAYS** - auto-delete logs older than N days (default: 90)
-- **CLEAN_DOCKER** - enable/disable Docker cleanup (default: true)
-- **CLEAN_HOMEBREW** - enable/disable Homebrew cleanup (default: true)
-- **CLEAN_NPM** - enable/disable npm cleanup (default: true)
-- **CLEAN_YARN** - enable/disable yarn cleanup (default: true)
-- **CLEAN_PIP** - enable/disable pip cleanup (default: true)
-- **CLEAN_APP_CACHES** - enable/disable app-specific caches (default: true)
-- **CLEAN_SYSTEM_CACHES** - enable/disable system caches (default: true)
-- **CLEAN_TRASH** - enable/disable trash cleanup (default: true)
-- **SHOW_NOTIFICATION** - enable/disable notifications (default: true)
+- **CLEAN_SYSTEM_CACHES** - user caches in `~/Library/Caches` (default: true)
+- **CLEAN_APP_CACHES** - Cursor, Notion, Slack, Telegram, Spotify, JetBrains (default: true)
+- **CLEAN_PACKAGE_MANAGERS** - npm, yarn, Homebrew, pip, gem (default: true)
+- **CLEAN_BROWSER_CACHES** - Chrome cache (default: true)
+- **CLEAN_TRASH** - empty Trash (default: true)
+- **CLEAN_TEMP_FILES** - `/tmp`, `/var/tmp` (default: true)
+- **CLEAN_DOCKER** - Docker system prune (default: true)
+- **SHOW_NOTIFICATION** - macOS notification after cleanup (default: true)
 
 ### Example Config
 ```bash
-# Enable dry-run by default
-DRY_RUN=false
-
 # Disable Docker cleanup
 CLEAN_DOCKER=false
 
@@ -209,24 +217,25 @@ LOG_RETENTION_DAYS=180
 
 ## Automation with Cron
 
-### Weekly Cleanup (Every Sunday at 2 AM)
+### Weekly Cleanup (Every Monday at 9 AM)
 ```bash
-# Edit crontab
-crontab -e
-
-# Add this line:
-0 2 * * 0 /Users/YOUR_USERNAME/.scripts/cleaner.sh --no-notify >> /Users/YOUR_USERNAME/.scripts/logs/cron.log 2>&1
+# cleaner.sh writes its own log, no >> redirect needed
+0 9 * * 1 ~/.scripts/cleaner.sh 2>&1
 ```
 
-### Daily Health Check (Every day at 8 AM)
+### Weekly System Updates (Every Friday at 12 PM)
+
 ```bash
-0 8 * * * /Users/YOUR_USERNAME/.scripts/health.sh >> /Users/YOUR_USERNAME/.scripts/logs/health.log 2>&1
+0 12 * * 5 ~/.scripts/update.sh >> ~/.scripts/logs/update.log 2>&1
 ```
 
-### Weekly System Updates (Every Monday at 3 AM)
+### Monthly Health Check (1st of month at 12 PM)
+
 ```bash
-0 3 * * 1 /Users/YOUR_USERNAME/.scripts/update.sh --no-notify >> /Users/YOUR_USERNAME/.scripts/logs/update.log 2>&1
+0 12 1 * * ~/.scripts/health.sh >> ~/.scripts/logs/health.log 2>&1
 ```
+
+> **Tip:** use `crontab -l` to view and `crontab -` with a pipe to edit without vim.
 
 ## Safety Features
 
@@ -316,6 +325,34 @@ brew install smartmontools
 - Config files are user-readable but may contain sensitive paths
 - Logs contain information about system state and cleaned items
 - Keep logs private or delete after review
+
+## Deploying Changes
+
+If you develop locally and have the toolkit installed at `~/.scripts/fuck-cleanmymac`, use the deploy script to sync:
+
+```bash
+./scripts/deploy.sh          # fetch + reset installed copy to match GitHub
+./scripts/deploy.sh --push   # push local changes first, then deploy
+```
+
+The script also copies the SwiftBar plugin if it's installed as a regular file (not a symlink).
+
+## Project Structure
+
+```text
+fuck-cleanmymac/
+├── cleaner.sh              # Main cleanup script
+├── health.sh               # System health monitor
+├── update.sh               # Package & system updater
+├── cleaner.conf            # Configuration template
+├── swiftbar/
+│   └── system-monitor.5s.py  # SwiftBar menu bar plugin
+├── scripts/
+│   ├── install.sh          # Auto-installer
+│   ├── uninstall.sh        # Uninstaller
+│   └── deploy.sh           # Dev → installed copy sync
+└── README.md
+```
 
 ## Contributing
 

@@ -120,11 +120,15 @@ print(
 )
 print("---")
 
-# Determine script paths relative to current file
+# Determine script paths: try relative to plugin, then fall back to ~/.scripts
 PLUGIN_DIR = Path(__file__).parent.absolute()
 SCRIPTS_DIR = PLUGIN_DIR.parent
 
 cleaner_path = SCRIPTS_DIR / "cleaner.sh"
+if not cleaner_path.exists():
+    SCRIPTS_DIR = Path.home() / ".scripts"
+    cleaner_path = SCRIPTS_DIR / "cleaner.sh"
+
 update_path = SCRIPTS_DIR / "update.sh"
 health_path = SCRIPTS_DIR / "health.sh"
 

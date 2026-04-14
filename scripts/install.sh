@@ -16,9 +16,9 @@ set -euo pipefail
 # - Installs optional dependencies
 #
 # Usage:
-#   curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/install.sh | bash
+#   curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/scripts/install.sh | bash
 #   # OR
-#   ./install.sh [OPTIONS]
+#   ./scripts/install.sh [OPTIONS]
 #
 # Options:
 #   --skip-deps     Skip dependency installation
@@ -355,7 +355,7 @@ Examples:
   $0 --uninstall
 
 Quick Install:
-  curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/install.sh | bash
+  curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/scripts/install.sh | bash
 
 EOF
 }

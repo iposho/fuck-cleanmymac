@@ -79,13 +79,13 @@ nano ~/.config/fuck-cleanmymac/cleaner.conf
 Common settings:
 ```bash
 # Disable Docker cleanup
-CLEAN_DOCKER="no"
+CLEAN_DOCKER=false
 
 # Keep logs for 180 days instead of 90
 LOG_RETENTION_DAYS=180
 
 # Disable notifications
-SHOW_NOTIFICATION="no"
+SHOW_NOTIFICATION=false
 ```
 
 ### Set Up Automatic Weekly Cleanup
@@ -93,13 +93,11 @@ SHOW_NOTIFICATION="no"
 During installation, you'll be asked about this. To enable it manually:
 
 ```bash
-crontab -e
+# cleaner.sh writes its own log, no >> redirect needed
+0 9 * * 1 ~/.scripts/cleaner.sh 2>&1
 ```
 
-Add this line (cleanup every Sunday at 2 AM):
-```
-0 2 * * 0 ~/.scripts/cleaner.sh --no-notify >> ~/.scripts/logs/cron.log 2>&1
-```
+Add to crontab with: `crontab -l | { cat; echo '0 9 * * 1 ~/.scripts/cleaner.sh 2>&1'; } | crontab -`
 
 ## Daily Workflow
 
@@ -193,7 +191,7 @@ Check out the full documentation:
 
 Found a bug? Have a feature request?
 
-Open an issue: https://github.com/iposho/fuck-cleanmymac/issues
+Open an issue: <https://github.com/iposho/fuck-cleanmymac/issues>
 
 ## Next Steps
 
