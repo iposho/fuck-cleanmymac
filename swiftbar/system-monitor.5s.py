@@ -220,11 +220,12 @@ def extract_log_summary(log_path, max_lines=6):
 def print_log_block(label, log_path, mtime):
     if log_path:
         time_str = format_log_time(mtime)
-        print(f"--{label} ({time_str})")
+        print(f"--{label} ({time_str}) | bold=true")
         for line in extract_log_summary(log_path):
             safe_line = line.replace("|", "∣")
             print(f"--{safe_line} | font=AndaleMono size=10 color=white")
-        print(f"--─── open file | shell=open param1={log_path} terminal=false")
+        print("-- ---")
+        print(f"--Open log file | shell=open param1={log_path} terminal=false")
     else:
         print(f"--{label}: no data | color=gray")
 
@@ -234,7 +235,7 @@ health_log, health_mtime = get_single_log("health.log")
 
 print("📋 Logs")
 print_log_block("🧹 Cleanup", cleaner_log, cleaner_mtime)
-print("-----")
+print("-- ---")
 print_log_block("🚀 Update", update_log, update_mtime)
-print("-----")
+print("-- ---")
 print_log_block("🩺 Health", health_log, health_mtime)

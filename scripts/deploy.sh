@@ -33,6 +33,9 @@ if ! git -C "$INSTALL_DIR" reset --hard origin/main; then
     exit 1
 fi
 
+# Ensure scripts are executable (git reset can lose +x on some setups)
+chmod +x "$INSTALL_DIR"/*.sh "$INSTALL_DIR"/swiftbar/*.py 2>/dev/null
+
 # Verify symlinks
 echo ""
 echo "✅ Deployed. Symlink status:"
