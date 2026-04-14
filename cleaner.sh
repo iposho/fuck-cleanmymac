@@ -1,8 +1,10 @@
 #!/bin/bash
 set -uo pipefail
 
-# Configure PATH for cron jobs
-export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./lib.sh
+source "$SCRIPT_DIR/lib.sh"
+fc_setup_path
 
 # ============================================================================
 # CONFIGURATION LOADING
@@ -29,7 +31,7 @@ load_config() {
     local config_paths=(
         "$HOME/.config/fuck-cleanmymac/cleaner.conf"
         "$HOME/.scripts/cleaner.conf"
-        "$(dirname "$0")/cleaner.conf"
+        "$SCRIPT_DIR/cleaner.conf"
         "./cleaner.conf"
     )
 
@@ -110,15 +112,20 @@ EOF
 START_DATE=$(date "+%Y-%m-%d %H:%M:%S")
 START_SEC=$(date +%s)
 LOG_SEP="=================================================================================="
+LOG_FILE=""
 
-# Create log directory
-mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/cleaner_$(date +%Y%m%d_%H%M%S).log"
+init_logging() {
+    LOG_FILE=$(fc_prepare_log_file "$LOG_DIR" "cleaner")
+}
 
 # Logging function
 log() {
     local message="$1"
-    echo "$message" | tee -a "$LOG_FILE"
+    if [ -n "$LOG_FILE" ]; then
+        fc_log "$LOG_FILE" "$message"
+    else
+        echo "$message"
+    fi
 }
 
 debug_log() {
@@ -131,7 +138,15 @@ debug_log() {
 # PATH VALIDATION FUNCTIONS
 # ============================================================================
 
-# Validate path: allow removals only within safe boundaries (user home or /Users/<user>)
+expand_path() {
+    local raw="$1"
+    local expanded="${raw/#\~/$HOME}"
+    expanded="${expanded//\$HOME/$HOME}"
+    expanded="${expanded//\$\{HOME\}/$HOME}"
+    printf '%s' "$expanded"
+}
+
+# Validate path: allow removals only in user home + explicit temp directories
 # Returns 0 if path is valid for removal/cleaning, otherwise 1
 validate_path() {
     local raw="$1"
@@ -146,10 +161,10 @@ validate_path() {
     expanded="${raw/#\~/$HOME}"
 
     # Resolve symlinks and canonicalize the path if possible
-    if command -v realpath >/dev/null 2>&1; then
+    if fc_has_cmd realpath; then
         # On macOS, realpath doesn't support -m. We try without it.
         expanded=$(realpath "$expanded" 2>/dev/null || printf "%s" "$expanded")
-    elif command -v readlink >/dev/null 2>&1; then
+    elif fc_has_cmd readlink; then
         expanded=$(readlink -f "$expanded" 2>/dev/null || printf "%s" "$expanded")
     fi
 
@@ -173,13 +188,6 @@ validate_path() {
         return 0
     fi
 
-    # Allow /Users/<anything> but only if it's not the top-level /Users
-    if [[ "$expanded" == /Users/* ]]; then
-        if [[ "$expanded" != "/Users" && "$expanded" != "/Users/" ]]; then
-            return 0
-        fi
-    fi
-
     # Default: invalid
     debug_log "Path rejected (not in safe location): $expanded"
     return 1
@@ -196,7 +204,7 @@ safe_remove() {
 
     # Expand path for validation and logging
     local expanded
-    expanded=$(eval echo "$path")
+    expanded=$(expand_path "$path")
 
     if [ "$VALIDATE_PATHS" = true ] && ! validate_path "$expanded"; then
         log "❌ Skipped removal of $description: path not validated or too broad: $expanded"
@@ -225,7 +233,7 @@ safe_clean() {
 
     # Expand path for validation and logging
     local expanded
-    expanded=$(eval echo "$path")
+    expanded=$(expand_path "$path")
 
     if [ "$VALIDATE_PATHS" = true ] && ! validate_path "$expanded"; then
         log "❌ Skipped cleaning $description: path not validated or too broad: $expanded"
@@ -240,10 +248,10 @@ safe_clean() {
         if [ -n "$first_entry" ]; then
             if [ "$DRY_RUN" = true ]; then
                 local item_count
-                item_count=$(find "$expanded" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
+                item_count=$(find "$expanded" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d '[:space:]')
                 log "🏜  [DRY-RUN] Would clean: $description (~$item_count items in $expanded)"
             else
-                if rm -rf "$expanded"/* 2>/dev/null; then
+                if find "$expanded" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null; then
                     log "✅ $description cleaned ($expanded)"
                 else
                     # For system temp directories, naturally some files will be unremovable without sudo
@@ -273,6 +281,9 @@ main() {
     # Parse command-line arguments
     parse_arguments "$@"
 
+    # Initialize logging after config/arguments have been applied
+    init_logging
+
     # Calculate free space BEFORE (in megabytes)
     BEFORE=$(df -m / | awk 'NR==2 {print $4}')
 
@@ -286,7 +297,7 @@ main() {
     # 1. DOCKER CLEANUP
     if [ "$CLEAN_DOCKER" = true ]; then
         log "🐳 Docker cleanup..."
-        if command -v docker &> /dev/null; then
+        if fc_has_cmd docker; then
             (docker info > /dev/null 2>&1) &
             DOCKER_PID=$!
             counter=0
@@ -331,7 +342,7 @@ main() {
             if [ "$DRY_RUN" = true ]; then
                 log "🏜  [DRY-RUN] Would clean npm cache"
             else
-                if command -v npm &> /dev/null; then
+                if fc_has_cmd npm; then
                     if npm cache clean --force > /dev/null 2>&1; then
                         log "✅ npm cache cleaned (via npm CLI)"
                     else
@@ -359,7 +370,7 @@ main() {
         fi
 
         # Homebrew
-        if command -v brew &> /dev/null; then
+        if fc_has_cmd brew; then
             if [ "$DRY_RUN" = true ]; then
                 log "🏜  [DRY-RUN] Would clean Homebrew cache"
             else
@@ -430,12 +441,14 @@ main() {
 
         # JetBrains IDEs
         if [ -d ~/Library/Caches/JetBrains ]; then
-            if [ "$DRY_RUN" = true ]; then
-                log "🏜  [DRY-RUN] Would clean JetBrains caches"
-            else
-                find ~/Library/Caches/JetBrains -name "*WebStorm*" -type d -exec rm -rf {}/* + 2>/dev/null && \
-                    log "✅ JetBrains caches cleaned" || \
-                    log "❌ Failed to clean JetBrains caches"
+            jetbrains_found=0
+            while IFS= read -r -d '' jb_dir; do
+                jetbrains_found=1
+                safe_clean "$jb_dir" "JetBrains Cache ($(basename "$jb_dir"))"
+            done < <(find "$HOME/Library/Caches/JetBrains" -mindepth 1 -maxdepth 1 -type d -name "*WebStorm*" -print0 2>/dev/null)
+
+            if [ "$jetbrains_found" -eq 0 ]; then
+                debug_log "JetBrains WebStorm caches not found"
             fi
         fi
     fi
@@ -503,20 +516,12 @@ main() {
 
     # NOTIFICATION
     if [ "$SHOW_NOTIFICATION" = true ] && [ "$DRY_RUN" = false ]; then
-        if command -v osascript >/dev/null 2>&1; then
-            if [ $DIFF -gt 0 ]; then
-                MSG="Freed $DIFF MB in $RUNTIME seconds"
-            else
-                MSG="System already clean! (Took $RUNTIME seconds)"
-            fi
-
-            # Escape quotes and backslashes for AppleScript
-            MSG="${MSG//\\/\\\\}"
-            MSG="${MSG//\"/\\\"}"
-
-            osascript -e "display notification \"$MSG\" with title \"fuck cleanmymac\" subtitle \"Cleanup completed\"" \
-                2>/dev/null || true
+        if [ "$DIFF" -gt 0 ]; then
+            MSG="Freed $DIFF MB in $RUNTIME seconds"
+        else
+            MSG="System already clean! (Took $RUNTIME seconds)"
         fi
+        fc_notify "fuck cleanmymac" "$MSG" "Cleanup completed"
     fi
 
     return 0

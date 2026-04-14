@@ -1,8 +1,10 @@
 #!/bin/bash
 set -uo pipefail
 
-# Configure PATH for cron jobs
-export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./lib.sh
+source "$SCRIPT_DIR/lib.sh"
+fc_setup_path
 
 # Timings and separators
 START_DATE=$(date "+%Y-%m-%d %H:%M:%S")
@@ -17,9 +19,10 @@ echo ""
 
 UPDATES_AVAILABLE=0
 UPDATES_INSTALLED=0
+NPM_USE_SUDO="${NPM_USE_SUDO:-false}"
 
 # 1. HOMEBREW UPDATES
-if command -v brew &> /dev/null; then
+if fc_has_cmd brew; then
     echo "🍺 Checking Homebrew..."
     brew update 2>&1 | grep -v '^$' | sed 's/^/   /' || true
     OUTDATED_BREW=$({ brew outdated -q 2>/dev/null || true; } | grep '[^[:space:]]' || true)
@@ -48,7 +51,7 @@ fi
 echo ""
 
 # 2. APP STORE UPDATES (if mas is installed)
-if command -v mas &> /dev/null; then
+if fc_has_cmd mas; then
     echo "📱 Checking App Store updates..."
     MAS_OUTDATED=$({ mas outdated 2>/dev/null || true; } | grep '[^[:space:]]' || true)
 
@@ -75,7 +78,7 @@ fi
 echo ""
 
 # 3. NPM GLOBAL PACKAGES
-if command -v npm &> /dev/null; then
+if fc_has_cmd npm; then
     echo "📦 Checking npm global packages..."
     NPM_OUTDATED_RAW=$({ npm outdated -g 2>/dev/null || true; } | tail -n +2 | grep '[^[:space:]]' || true)
 
@@ -89,11 +92,21 @@ if command -v npm &> /dev/null; then
             echo "   • $pkg: $current → $latest"
         done
         echo "   Updating..."
-        if sudo npm update -g 2>&1 | grep -v 'npm WARN EBADENGINE' | sed 's/^/   /'; then
+        if [ "$NPM_USE_SUDO" = true ]; then
+            npm_update_cmd=(sudo -n npm update -g)
+        else
+            npm_update_cmd=(npm update -g)
+        fi
+
+        if "${npm_update_cmd[@]}" 2>&1 | grep -v 'npm WARN EBADENGINE' | sed 's/^/   /'; then
             echo "✅ npm global packages updated"
             UPDATES_INSTALLED=$((UPDATES_INSTALLED + NPM_OUTDATED))
         else
-            echo "❌ Failed to update npm packages"
+            if [ "$NPM_USE_SUDO" = true ]; then
+                echo "❌ Failed to update npm packages with sudo -n (no interactive prompt allowed)"
+            else
+                echo "❌ Failed to update npm packages (try user-level npm prefix or NPM_USE_SUDO=true)"
+            fi
         fi
     else
         echo "✅ All npm global packages are up to date"
@@ -103,7 +116,7 @@ fi
 echo ""
 
 # 4. PNPM GLOBAL PACKAGES (if installed)
-if command -v pnpm &> /dev/null; then
+if fc_has_cmd pnpm; then
     echo "📦 Checking pnpm global packages..."
     PNPM_OUTDATED_RAW=$({ pnpm outdated -g 2>/dev/null || true; } | tail -n +2 | grep '[^[:space:]]' || true)
 
@@ -163,23 +176,15 @@ echo "$LOG_SEP"
 echo ""
 
 # NOTIFICATION
-if command -v osascript &> /dev/null; then
-    if [ "$UPDATES_INSTALLED" -gt 0 ]; then
-        MSG="Installed $UPDATES_INSTALLED updates"
-        SUBTITLE="System is more up-to-date"
-    elif [ "$SYSTEM_UPDATES" -gt 0 ]; then
-        MSG="$SYSTEM_UPDATES system updates available"
-        SUBTITLE="macOS updates require sudo to install"
-    else
-        MSG="All packages are up to date"
-        SUBTITLE="System is fully updated"
-    fi
-
-    # Escape special characters for AppleScript
-    MSG="${MSG//\\/\\\\}"
-    MSG="${MSG//\"/\\\"}"
-    SUBTITLE="${SUBTITLE//\\/\\\\}"
-    SUBTITLE="${SUBTITLE//\"/\\\"}"
-
-    osascript -e "display notification \"$MSG\" with title \"fuck cleanmymac\" subtitle \"$SUBTITLE\"" 2>/dev/null || true
+if [ "$UPDATES_INSTALLED" -gt 0 ]; then
+    MSG="Installed $UPDATES_INSTALLED updates"
+    SUBTITLE="System is more up-to-date"
+elif [ "$SYSTEM_UPDATES" -gt 0 ]; then
+    MSG="$SYSTEM_UPDATES system updates available"
+    SUBTITLE="macOS updates require sudo to install"
+else
+    MSG="All packages are up to date"
+    SUBTITLE="System is fully updated"
 fi
+
+fc_notify "fuck cleanmymac" "$MSG" "$SUBTITLE"

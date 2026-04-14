@@ -1,8 +1,10 @@
 #!/bin/bash
 set -uo pipefail
 
-# Configure PATH for cron jobs
-export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./lib.sh
+source "$SCRIPT_DIR/lib.sh"
+fc_setup_path
 
 # Initialization
 START_DATE=$(date "+%Y-%m-%d %H:%M:%S")
@@ -70,7 +72,7 @@ echo "💾 STORAGE INFORMATION"
 echo "$SUB_SEP"
 
 # SSD/HDD Info via smartctl (if available)
-if command -v smartctl &> /dev/null; then
+if fc_has_cmd smartctl; then
     DISK_INFO=$(smartctl -i /dev/disk0 2>/dev/null)
     if echo "$DISK_INFO" | grep -q "SMART support"; then
         SMART_STATUS=$(echo "$DISK_INFO" | grep "SMART overall" | head -1 | awk -F': ' '{print $2}')
@@ -98,50 +100,69 @@ echo ""
 echo "🔋 BATTERY INFORMATION"
 echo "$SUB_SEP"
 
-BATT_INFO=$(pmset -g batt 2>/dev/null)
+BATT_INFO=$(pmset -g batt 2>/dev/null || true)
 
-if echo "$BATT_INFO" | grep -q "Battery Information"; then
-    CYCLES=$(echo "$BATT_INFO" | grep "Cycle Count" | awk '{print $3}')
-    MAX_CAPACITY=$(echo "$BATT_INFO" | grep "Maximum Capacity" | awk '{print $3}' | tr -cd '0-9')
-    CHARGE=$(echo "$BATT_INFO" | grep "State of Charge" | awk '{print $4}')
-    CHARGING=$(echo "$BATT_INFO" | grep "Charging" | head -1 | awk '{print $2}')
-    FULLY_CHARGED=$(echo "$BATT_INFO" | grep "Fully Charged" | awk '{print $3}')
-    CONDITION=$(echo "$BATT_INFO" | grep "Condition" | awk '{print $2}')
+if echo "$BATT_INFO" | grep -q "InternalBattery"; then
+    POWER_SOURCE=$(echo "$BATT_INFO" | head -1 | sed -n "s/^Now drawing from '\(.*\)'/\1/p")
+    BATT_LINE=$(echo "$BATT_INFO" | grep "InternalBattery" | head -1)
+    CHARGE=$(echo "$BATT_LINE" | grep -o '[0-9]\+%' | head -1)
+    TIME_REMAINING=$(echo "$BATT_LINE" | grep -o '[0-9]\+:[0-9]\+' | head -1)
+    CHARGE_STATE=$(echo "$BATT_LINE" | awk -F';' '{gsub(/^ +| +$/, "", $2); print $2}')
 
-    # Get charging information
-    POWER_SOURCE=$(pmset -g batt | head -1 | grep -o "'.*'" | tr -d "'")
-    TIME_REMAINING=$(pmset -g batt | grep -o '[0-9]*:[0-9]*' | head -1)
+    BATT_IOREG=$(ioreg -rc AppleSmartBattery -l 2>/dev/null || true)
+    CYCLES=$(echo "$BATT_IOREG" | awk -F'= ' '/^[[:space:]]+"CycleCount"[[:space:]]*=/ {gsub(/[^0-9]/, "", $2); print $2; exit}')
+    RAW_MAX_CAPACITY=$(echo "$BATT_IOREG" | awk -F'= ' '/^[[:space:]]+"AppleRawMaxCapacity"[[:space:]]*=/ {gsub(/[^0-9]/, "", $2); print $2; exit}')
+    DESIGN_CAPACITY=$(echo "$BATT_IOREG" | awk -F'= ' '/^[[:space:]]+"DesignCapacity"[[:space:]]*=/ {gsub(/[^0-9]/, "", $2); print $2; exit}')
+    CONDITION=$(echo "$BATT_IOREG" | awk -F'= ' '/^[[:space:]]+"BatteryHealth"[[:space:]]*=/ {gsub(/"/, "", $2); gsub(/^ +| +$/, "", $2); print $2; exit}')
 
-    echo "Power Source:   $POWER_SOURCE"
-    [ -n "$CHARGE" ] && echo "Current Charge: $CHARGE"
+    if [ -z "$RAW_MAX_CAPACITY" ]; then
+        RAW_MAX_CAPACITY=$(echo "$BATT_IOREG" | awk -F'= ' '/^[[:space:]]+"NominalChargeCapacity"[[:space:]]*=/ {gsub(/[^0-9]/, "", $2); print $2; exit}')
+    fi
+
+    if [[ "$RAW_MAX_CAPACITY" =~ ^[0-9]+$ && "$DESIGN_CAPACITY" =~ ^[0-9]+$ && "$DESIGN_CAPACITY" -gt 0 ]]; then
+        MAX_CAPACITY=$((RAW_MAX_CAPACITY * 100 / DESIGN_CAPACITY))
+    else
+        MAX_CAPACITY=""
+    fi
+
+    [ -n "$POWER_SOURCE" ] && echo "Power Source:   $POWER_SOURCE"
+    [ -n "$CHARGE" ] && echo "Current Charge: $CHARGE ($CHARGE_STATE)"
     [ -n "$TIME_REMAINING" ] && echo "Time Remaining: $TIME_REMAINING"
+    [ -n "$CONDITION" ] && echo "Condition:      $CONDITION"
     echo ""
 
     # Assess battery health
-    if [[ $MAX_CAPACITY -ge 90 ]]; then
-        BAT_ICON="🟢"
-        BAT_STATUS="Excellent"
-    elif [[ $MAX_CAPACITY -ge 80 ]]; then
-        BAT_ICON="🟢"
-        BAT_STATUS="Good"
-    elif [[ $MAX_CAPACITY -ge 70 ]]; then
-        BAT_ICON="🟡"
-        BAT_STATUS="Fair"
+    if [[ "$MAX_CAPACITY" =~ ^[0-9]+$ ]]; then
+        if [[ "$MAX_CAPACITY" -ge 90 ]]; then
+            BAT_ICON="🟢"
+            BAT_STATUS="Excellent"
+        elif [[ "$MAX_CAPACITY" -ge 80 ]]; then
+            BAT_ICON="🟢"
+            BAT_STATUS="Good"
+        elif [[ "$MAX_CAPACITY" -ge 70 ]]; then
+            BAT_ICON="🟡"
+            BAT_STATUS="Fair"
+        else
+            BAT_ICON="🔴"
+            BAT_STATUS="Replace Soon"
+        fi
+        echo "$BAT_ICON Assessment:         $BAT_STATUS (${MAX_CAPACITY}%)"
     else
-        BAT_ICON="🔴"
-        BAT_STATUS="Replace Soon"
+        BAT_ICON="⚪"
+        BAT_STATUS="Unknown"
+        echo "$BAT_ICON Assessment:         $BAT_STATUS"
     fi
 
-    echo "$BAT_ICON Assessment:         $BAT_STATUS"
-
     # Cycle forecast (Apple specifies ~1000 cycles for modern Macs)
-    CYCLES_REMAINING=$((1000 - CYCLES))
-    if [[ $CYCLES_REMAINING -gt 0 ]]; then
-        ESTIMATED_YEARS=$((CYCLES_REMAINING / 300))
-        echo "   Cycles Used:         $CYCLES / 1000"
-        echo "   Estimated Remaining: ~${ESTIMATED_YEARS} years"
-    else
-        echo "   Cycles Used:         $CYCLES (Battery may need replacement)"
+    if [[ "$CYCLES" =~ ^[0-9]+$ ]]; then
+        CYCLES_REMAINING=$((1000 - CYCLES))
+        if [[ "$CYCLES_REMAINING" -gt 0 ]]; then
+            ESTIMATED_YEARS=$((CYCLES_REMAINING / 300))
+            echo "   Cycles Used:         $CYCLES / 1000"
+            echo "   Estimated Remaining: ~${ESTIMATED_YEARS} years"
+        else
+            echo "   Cycles Used:         $CYCLES (Battery may need replacement)"
+        fi
     fi
 else
     echo "ℹ️  No battery detected (desktop Mac or battery unavailable)"
@@ -161,8 +182,9 @@ TOTAL_MEM=$(sysctl -n hw.memsize)
 TOTAL_MEM_GB=$((TOTAL_MEM / 1073741824))
 
 # Memory statistics via vm_stat
-VM_STAT=$(vm_stat)
-PAGE_SIZE=$(vm_stat 2>/dev/null | head -1 | grep -o '[0-9]*' | tail -1)
+VM_STAT=$(vm_stat 2>/dev/null || true)
+PAGE_SIZE=$(echo "$VM_STAT" | head -1 | awk -F'page size of ' '{print $2}' | awk '{print $1}')
+[ -z "$PAGE_SIZE" ] && PAGE_SIZE=4096
 
 # Extract memory pages (values in thousands)
 PAGES_WIRED=$(echo "$VM_STAT" | grep "Pages wired down" | awk '{print $4}' | tr -d '.')
@@ -170,11 +192,11 @@ PAGES_ACTIVE=$(echo "$VM_STAT" | grep "Pages active" | awk '{print $3}' | tr -d 
 PAGES_INACTIVE=$(echo "$VM_STAT" | grep "Pages inactive" | awk '{print $3}' | tr -d '.')
 PAGES_FREE=$(echo "$VM_STAT" | grep "Pages free" | awk '{print $3}' | tr -d '.')
 
-# Convert to MB (pages * 4096 bytes / 1024 / 1024)
-WIRED_MB=$((PAGES_WIRED * 4096 / 1048576))
-ACTIVE_MB=$((PAGES_ACTIVE * 4096 / 1048576))
-INACTIVE_MB=$((PAGES_INACTIVE * 4096 / 1048576))
-FREE_MB=$((PAGES_FREE * 4096 / 1048576))
+# Convert to MB (pages * PAGE_SIZE bytes / 1024 / 1024)
+WIRED_MB=$((PAGES_WIRED * PAGE_SIZE / 1048576))
+ACTIVE_MB=$((PAGES_ACTIVE * PAGE_SIZE / 1048576))
+INACTIVE_MB=$((PAGES_INACTIVE * PAGE_SIZE / 1048576))
+FREE_MB=$((PAGES_FREE * PAGE_SIZE / 1048576))
 
 USED_MB=$((WIRED_MB + ACTIVE_MB))
 USED_PERCENT=$((USED_MB * 100 / (TOTAL_MEM_GB * 1024)))
@@ -220,7 +242,8 @@ echo "Total Cores:        $CORES_TOTAL"
 [[ "$CORES_EFF" != "N/A" ]] && echo "  Efficiency:       $CORES_EFF"
 
 # Load average
-read LOAD_1 LOAD_5 LOAD_15 < <(uptime | grep -oE 'load average[s]?: [0-9.,]+, [0-9.,]+, [0-9.,]+' | awk -F': ' '{print $2}' | tr ',' ' ')
+LOAD_AVG=$(uptime | awk -F'load averages?: ' '{print $2}' | tr ',' ' ')
+read -r LOAD_1 LOAD_5 LOAD_15 <<< "$LOAD_AVG"
 
 echo ""
 echo "Load Average:"
@@ -257,10 +280,10 @@ echo ""
 echo "🌡️  TEMPERATURE"
 echo "$SUB_SEP"
 
-if command -v osx-cpu-temp &> /dev/null; then
+if fc_has_cmd osx-cpu-temp; then
     TEMP=$(osx-cpu-temp 2>/dev/null)
     echo "CPU Temperature:    $TEMP"
-elif command -v istats &> /dev/null; then
+elif fc_has_cmd istats; then
     istats cpu temp 2>/dev/null
 else
     echo "ℹ️  To monitor temperature install:"
@@ -353,10 +376,4 @@ if [ -z "$MESSAGE" ]; then
 fi
 
 # Show notification if osascript is available
-if command -v osascript &> /dev/null; then
-    # Escape special characters for AppleScript
-    MESSAGE=$(printf '%s\n' "$MESSAGE" | sed 's/"/\\"/g; s/\\/\\\\/g')
-    TITLE=$(printf '%s\n' "$TITLE" | sed 's/"/\\"/g; s/\\/\\\\/g')
-
-    osascript -e "display notification \"$MESSAGE\" with title \"$TITLE\"" 2>/dev/null || true
-fi
+fc_notify "$TITLE" "$MESSAGE"

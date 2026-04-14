@@ -125,15 +125,25 @@ PLUGIN_DIR = Path(__file__).parent.absolute()
 SCRIPTS_DIR = PLUGIN_DIR.parent
 
 cleaner_path = SCRIPTS_DIR / "cleaner.sh"
-if not cleaner_path.exists():
+if not cleaner_path.is_file():
     SCRIPTS_DIR = Path.home() / ".scripts"
     cleaner_path = SCRIPTS_DIR / "cleaner.sh"
 
 update_path = SCRIPTS_DIR / "update.sh"
 health_path = SCRIPTS_DIR / "health.sh"
+toolkit_update_path = SCRIPTS_DIR / "scripts" / "install.sh"
+
+if not toolkit_update_path.exists():
+    toolkit_update_path = Path.home() / ".scripts" / "fuck-cleanmymac" / "scripts" / "install.sh"
 
 print(f"🧹 Cleanup | shell={cleaner_path} terminal=true")
-print(f"🚀 Update | shell={update_path} terminal=true")
+print(f"🚀 System Update | shell={update_path} terminal=true")
+if toolkit_update_path.exists():
+    print(
+        f"🧩 Toolkit Update | shell={toolkit_update_path} param1=--skip-deps param2=--skip-cron param3=--skip-swiftbar terminal=true refresh=true"
+    )
+else:
+    print("🧩 Toolkit Update (not found) | color=gray")
 print(f"🩺 Health Check | shell={health_path} terminal=true")
 print(
     "📂 Disk Utility | shell=bash param1=-c param2='open -a \"Disk Utility\"' terminal=false"

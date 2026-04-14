@@ -30,8 +30,9 @@ A comprehensive macOS system cleaner and health monitor toolkit designed to safe
 
 ### ⚡ **Update Utility (`update.sh`)**
 - **Homebrew updates** - upgrades installed packages
-- **System updates** - checks and installs macOS updates
-- **Self-updates** - optional check for script updates
+- **App Store updates** - updates apps via `mas` (if installed)
+- **Node package updates** - updates global `npm` / `pnpm` packages
+- **System updates** - checks available macOS updates (`softwareupdate -l`)
 - **Safe execution** - error handling and notifications
 
 ### 📊 **SwiftBar Plugin**
@@ -240,7 +241,7 @@ LOG_RETENTION_DAYS=180
 ## Safety Features
 
 ### Path Validation
-- Prevents deletion outside user's home directory and `/Users/<user>`
+- Prevents deletion outside user's home directory (`$HOME`)
 - Blocks dangerous system paths: `/`, `/System`, `/usr`, `/bin`, `/sbin`, `/etc`, `/private`
 - Explicitly allows system temp directories (`/tmp`, `/var/tmp`) for safe cleanup
 - Validates all paths before deletion
@@ -312,6 +313,10 @@ brew install smartmontools
 - `smartctl` - for SSD health monitoring (install via `brew install smartmontools`)
 - `osx-cpu-temp` - for CPU temperature (install via `brew install osx-cpu-temp`)
 
+### Update Script Note
+- `update.sh` runs `npm update -g` without `sudo` by default
+- To force sudo in non-interactive mode, set `NPM_USE_SUDO=true`
+
 ## Performance Notes
 
 - Full cleanup typically takes 5-30 seconds depending on system state
@@ -344,6 +349,7 @@ fuck-cleanmymac/
 ├── cleaner.sh              # Main cleanup script
 ├── health.sh               # System health monitor
 ├── update.sh               # Package & system updater
+├── lib.sh                  # Shared shell helpers (PATH, notify, logging)
 ├── cleaner.conf            # Configuration template
 ├── swiftbar/
 │   └── system-monitor.5s.py  # SwiftBar menu bar plugin

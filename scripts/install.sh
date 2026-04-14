@@ -175,13 +175,13 @@ add_to_path() {
 
     for config in "${shell_configs[@]}"; do
         if [[ -f "$config" ]]; then
-            if ! grep -q "$BIN_DIR" "$config" 2>/dev/null; then
+            if grep -qF "$BIN_DIR" "$config" 2>/dev/null || grep -qF '$HOME/.scripts' "$config" 2>/dev/null; then
+                print_info "PATH already configured in $config"
+            else
                 echo "" >> "$config"
                 echo "# fuck-cleanmymac" >> "$config"
                 echo "$path_line" >> "$config"
                 print_success "Added to $config"
-            else
-                print_info "PATH already configured in $config"
             fi
         fi
     done

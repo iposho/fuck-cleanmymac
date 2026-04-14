@@ -5,9 +5,11 @@ Real-time macOS system monitor for your menu bar. Built with Python, this plugin
 ## Features
 
 - **Menu bar**: CPU usage %, RAM used/total, free disk space
-- **Quick actions**: Cleanup, Update, Health Check, Disk Utility
+- **Quick actions**: Cleanup, System Update (packages), Toolkit Update (scripts), Health Check, Disk Utility
 - **Processes submenu**: network-connected processes with kill action
 - **Logs submenu**: cleanup, update, and health logs with timestamps and direct file links
+
+`Toolkit Update` runs `scripts/install.sh --skip-deps --skip-cron --skip-swiftbar` to refresh the installed toolkit files non-interactively.
 
 ## Installation
 
