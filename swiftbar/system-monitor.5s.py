@@ -202,40 +202,25 @@ def format_log_time(mtime):
     else:
         return dt.strftime("%d.%m.%Y")
 
-def extract_log_summary(log_path, max_lines=6):
-    """Extract summary block (SUMMARY/ИТОГО section) from a log file."""
-    try:
-        text = log_path.read_text(errors="replace")
-        lines = [l.rstrip() for l in text.splitlines() if l.strip()]
-        summary_start = -1
-        for i, line in enumerate(lines):
-            if "SUMMARY" in line or "ИТОГО" in line:
-                summary_start = i
-        if summary_start >= 0:
-            return lines[summary_start : summary_start + max_lines]
-        return lines[-max_lines:]
-    except Exception:
-        return []
-
-def print_log_block(label, log_path, mtime):
-    if log_path:
-        time_str = format_log_time(mtime)
-        print(f"--{label} ({time_str}) | bold=true")
-        for line in extract_log_summary(log_path):
-            safe_line = line.replace("|", "∣")
-            print(f"--{safe_line} | font=AndaleMono size=10 color=white")
-        print("-- ---")
-        print(f"--Open log file | shell=open param1={log_path} terminal=false")
-    else:
-        print(f"--{label}: no data | color=gray")
-
 cleaner_log, cleaner_mtime = get_last_log("cleaner_*.log")
 update_log, update_mtime = get_single_log("update.log")
 health_log, health_mtime = get_single_log("health.log")
 
 print("📋 Logs")
-print_log_block("🧹 Cleanup", cleaner_log, cleaner_mtime)
-print("-- ---")
-print_log_block("🚀 Update", update_log, update_mtime)
-print("-- ---")
-print_log_block("🩺 Health", health_log, health_mtime)
+
+log_entries = [
+    ("Cleanup log", cleaner_log, cleaner_mtime),
+    ("Update log", update_log, update_mtime),
+    ("Health check log", health_log, health_mtime),
+]
+
+for label, log_path, mtime in log_entries:
+    if log_path:
+        time_str = format_log_time(mtime)
+        print(f"--{label} — {time_str} | shell=open param1={log_path} terminal=false")
+    else:
+        print(f"--{label} — no data | color=gray")
+
+if LOG_DIR.exists():
+    print("-- ---")
+    print(f"--Open logs folder | shell=open param1={LOG_DIR} terminal=false")

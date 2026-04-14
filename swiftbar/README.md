@@ -7,7 +7,7 @@ Real-time macOS system monitor for your menu bar. Built with Python, this plugin
 - **Menu bar**: CPU usage %, RAM used/total, free disk space
 - **Quick actions**: Cleanup, Update, Health Check, Disk Utility
 - **Processes submenu**: network-connected processes with kill action
-- **Logs submenu**: last cleanup, update, and health log summaries with "open file" links
+- **Logs submenu**: cleanup, update, and health logs with timestamps and direct file links
 
 ## Installation
 
