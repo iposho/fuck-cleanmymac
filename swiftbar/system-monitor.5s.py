@@ -2,7 +2,37 @@
 import subprocess
 import sys
 import re
+import shutil
 from pathlib import Path
+
+
+def get_cpu_temp():
+    """Return CPU temperature in °C, or None if unavailable."""
+    for cmd in (["osx-cpu-temp"], ["istats", "cpu", "temp"]):
+        if not shutil.which(cmd[0]):
+            continue
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=2, check=False
+            )
+            match = re.search(r"([\d.]+)", result.stdout)
+            if match:
+                temp = float(match.group(1))
+                if temp > 0:
+                    return temp
+        except Exception:
+            continue
+    return None
+
+
+def get_toolkit_version(scripts_dir):
+    for candidate in (
+        scripts_dir / "VERSION",
+        Path.home() / ".scripts" / "fuck-cleanmymac" / "VERSION",
+    ):
+        if candidate.is_file():
+            return candidate.read_text(encoding="utf-8").strip()
+    return None
 
 # Handle kill command
 if len(sys.argv) > 1 and sys.argv[1] == "kill" and len(sys.argv) > 2:
@@ -115,9 +145,12 @@ elif free_disk_gb < 50:
     disk_color = "orange"
 
 # Main menu bar line (separated by dot)
-print(
-    f"{cpu_usage:.1f}% • {used_gb:.1f} / {total_gb:.0f} GB • {free_disk_display} | size=11"
-)
+cpu_temp = get_cpu_temp()
+status_parts = [f"{cpu_usage:.1f}%"]
+if cpu_temp is not None:
+    status_parts.append(f"{cpu_temp:.0f}°")
+status_parts.extend([f"{used_gb:.1f} / {total_gb:.0f} GB", free_disk_display])
+print(" • ".join(status_parts) + " | size=11")
 print("---")
 
 # Determine script paths: try relative to plugin, then fall back to ~/.scripts
@@ -135,6 +168,8 @@ toolkit_update_path = SCRIPTS_DIR / "scripts" / "install.sh"
 
 if not toolkit_update_path.exists():
     toolkit_update_path = Path.home() / ".scripts" / "fuck-cleanmymac" / "scripts" / "install.sh"
+
+toolkit_version = get_toolkit_version(SCRIPTS_DIR)
 
 print(f"🧹 Cleanup | shell={cleaner_path} terminal=true")
 print(f"🚀 System Update | shell={update_path} terminal=true")
@@ -227,10 +262,18 @@ log_entries = [
 for label, log_path, mtime in log_entries:
     if log_path:
         time_str = format_log_time(mtime)
-        print(f"--{label} — {time_str} | shell=open param1={log_path} terminal=false")
+        print(
+            f"--{label} — {time_str} | shell=/usr/bin/open param1={log_path} terminal=false"
+        )
     else:
         print(f"--{label} — no data | color=gray")
 
 if LOG_DIR.exists():
     print("-- ---")
-    print(f"--Open logs folder | shell=open param1={LOG_DIR} terminal=false")
+    print(
+        f"--Open logs folder | shell=/usr/bin/open param1={LOG_DIR} terminal=false"
+    )
+
+print("---")
+version_label = f"v{toolkit_version}" if toolkit_version else "version unknown"
+print(f"fuck cleanmymac {version_label} | color=gray size=10")

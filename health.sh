@@ -14,6 +14,9 @@ unset _src _dir
 source "$SCRIPT_DIR/lib.sh"
 fc_setup_path
 
+LOG_DIR="$HOME/.scripts/logs"
+fc_init_run_log "$LOG_DIR/health.log"
+
 # Initialization
 START_DATE=$(date "+%Y-%m-%d %H:%M:%S")
 SUB_SEP="═══════════════════════════════════════════════════════════"
@@ -23,6 +26,7 @@ PERCENT_USED=""
 DATA_WRITTEN=""
 DATA_READ=""
 MAX_CAPACITY=""
+TEMP=""
 MESSAGE=""
 TITLE="System Health Report"
 
@@ -292,7 +296,9 @@ if fc_has_cmd osx-cpu-temp; then
     TEMP=$(osx-cpu-temp 2>/dev/null)
     echo "CPU Temperature:    $TEMP"
 elif fc_has_cmd istats; then
-    istats cpu temp 2>/dev/null
+    TEMP=$(istats cpu temp 2>/dev/null | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+    [ -n "$TEMP" ] && TEMP="${TEMP}°C"
+    echo "CPU Temperature:    ${TEMP:-N/A}"
 else
     echo "ℹ️  To monitor temperature install:"
     echo "   brew install osx-cpu-temp"
@@ -380,7 +386,7 @@ echo ""
 
 # Prepare notification message
 if [ -z "$MESSAGE" ]; then
-    MESSAGE="SSD: ${PERCENT_USED:-N/A}% | Battery: ${MAX_CAPACITY:-N/A}% | RAM: ${USED_PERCENT}% | CPU: $LOAD_STATUS"
+    MESSAGE="SSD: ${PERCENT_USED:-N/A}% | Battery: ${MAX_CAPACITY:-N/A}% | RAM: ${USED_PERCENT}% | CPU: $LOAD_STATUS | Temp: ${TEMP:-N/A}"
 fi
 
 # Show notification if osascript is available

@@ -210,7 +210,7 @@ Open an issue: <https://github.com/iposho/fuck-cleanmymac/issues>
 | **System Check** | `health.sh` |
 | **Updates** | `update.sh` |
 | **Configuration** | Edit `~/.config/fuck-cleanmymac/cleaner.conf` |
-| **Logs** | View `~/.scripts/logs/` |
+| **Logs** | View `~/.scripts/logs/` (`update.log`, `health.log`, `cleaner_*.log`) |
 | **Help** | `cleaner.sh --help` |
 
 ---

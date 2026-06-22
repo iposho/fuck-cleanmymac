@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.2.1 (2026-06-22)
+
+### New
+
+- **VERSION file** — toolkit version tracked in repo root; shown in SwiftBar dropdown menu
+- **CPU temperature in menu bar** — SwiftBar status line shows CPU temp when `osx-cpu-temp` or `istats` is available
+- **CPU temperature in health notification** — summary notification includes temp reading
+
+### Fixed
+
+- **update.sh / health.sh logging** — both scripts now write to `~/.scripts/logs/update.log` and `health.log` on every run (interactive and cron); previously logs were only created when cron redirected stdout
+- **SwiftBar log links** — log entries and logs folder use `/usr/bin/open` for reliable file opening on macOS
+
+### Changed
+
+- Cron examples for `update.sh` and `health.sh` no longer need `>> log` redirect (scripts handle logging internally)
+- Added `fc_init_run_log()` helper in `lib.sh` for shared run logging
+
 ## 2.2.0 (2026-04-14)
 
 ### New

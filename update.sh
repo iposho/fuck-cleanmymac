@@ -14,6 +14,9 @@ unset _src _dir
 source "$SCRIPT_DIR/lib.sh"
 fc_setup_path
 
+LOG_DIR="$HOME/.scripts/logs"
+fc_init_run_log "$LOG_DIR/update.log"
+
 # Timings and separators
 START_DATE=$(date "+%Y-%m-%d %H:%M:%S")
 START_SEC=$(date +%s)

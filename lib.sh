@@ -55,3 +55,17 @@ fc_log() {
         echo "$message"
     fi
 }
+
+fc_init_run_log() {
+    local log_file="$1"
+    local log_dir
+
+    log_dir=$(dirname "$log_file")
+    mkdir -p "$log_dir"
+
+    if [ -t 1 ]; then
+        exec > >(tee -a "$log_file") 2>&1
+    else
+        exec >> "$log_file" 2>&1
+    fi
+}

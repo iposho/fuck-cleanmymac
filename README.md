@@ -227,13 +227,15 @@ LOG_RETENTION_DAYS=180
 ### Weekly System Updates (Every Friday at 12 PM)
 
 ```bash
-0 12 * * 5 ~/.scripts/update.sh >> ~/.scripts/logs/update.log 2>&1
+# update.sh writes its own log, no >> redirect needed
+0 12 * * 5 ~/.scripts/update.sh
 ```
 
 ### Monthly Health Check (1st of month at 12 PM)
 
 ```bash
-0 12 1 * * ~/.scripts/health.sh >> ~/.scripts/logs/health.log 2>&1
+# health.sh writes its own log, no >> redirect needed
+0 12 1 * * ~/.scripts/health.sh
 ```
 
 > **Tip:** use `crontab -l` to view and `crontab -` with a pipe to edit without vim.
@@ -263,11 +265,19 @@ LOG_RETENTION_DAYS=180
 
 ## Logging
 
-Logs are saved to: `~/.scripts/logs/cleaner_YYYYMMDD_HHMMSS.log`
+All maintenance scripts write logs to `~/.scripts/logs/`:
+
+| Script | Log file |
+|--------|----------|
+| `cleaner.sh` | `cleaner_YYYYMMDD_HHMMSS.log` (one file per run) |
+| `update.sh` | `update.log` (appended each run) |
+| `health.sh` | `health.log` (appended each run) |
 
 View recent logs:
 ```bash
 tail -f ~/.scripts/logs/cleaner_*.log
+tail -f ~/.scripts/logs/update.log
+tail -f ~/.scripts/logs/health.log
 ```
 
 List all logs:
