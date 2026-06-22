@@ -34,6 +34,33 @@ def get_toolkit_version(scripts_dir):
             return candidate.read_text(encoding="utf-8").strip()
     return None
 
+
+def get_keyboard_lock_path(plugin_dir, scripts_dir):
+    for candidate in (
+        plugin_dir / "keyboard-lock.py",
+        scripts_dir / "swiftbar" / "keyboard-lock.py",
+        Path.home() / ".scripts" / "fuck-cleanmymac" / "swiftbar" / "keyboard-lock.py",
+    ):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def is_keyboard_locked(lock_script):
+    if not lock_script:
+        return False
+    try:
+        result = subprocess.run(
+            [sys.executable, str(lock_script), "status"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        return result.stdout.strip() == "locked"
+    except Exception:
+        return False
+
 # Handle kill command
 if len(sys.argv) > 1 and sys.argv[1] == "kill" and len(sys.argv) > 2:
     pid = sys.argv[2]
@@ -145,8 +172,15 @@ elif free_disk_gb < 50:
     disk_color = "orange"
 
 # Main menu bar line (separated by dot)
+PLUGIN_DIR = Path(__file__).parent.absolute()
+keyboard_lock_path = get_keyboard_lock_path(PLUGIN_DIR, PLUGIN_DIR.parent)
+keyboard_locked = is_keyboard_locked(keyboard_lock_path)
+
 cpu_temp = get_cpu_temp()
-status_parts = [f"{cpu_usage:.1f}%"]
+status_parts = []
+if keyboard_locked:
+    status_parts.append("🔒")
+status_parts.append(f"{cpu_usage:.1f}%")
 if cpu_temp is not None:
     status_parts.append(f"{cpu_temp:.0f}°")
 status_parts.extend([f"{used_gb:.1f} / {total_gb:.0f} GB", free_disk_display])
@@ -154,7 +188,6 @@ print(" • ".join(status_parts) + " | size=11")
 print("---")
 
 # Determine script paths: try relative to plugin, then fall back to ~/.scripts
-PLUGIN_DIR = Path(__file__).parent.absolute()
 SCRIPTS_DIR = PLUGIN_DIR.parent
 
 cleaner_path = SCRIPTS_DIR / "cleaner.sh"
@@ -180,6 +213,20 @@ if toolkit_update_path.exists():
 else:
     print("🧩 Toolkit Update (not found) | color=gray")
 print(f"🩺 Health Check | shell={health_path} terminal=true")
+if keyboard_lock_path:
+    if keyboard_locked:
+        print(
+            f"🔓 Unlock Keyboard | bash={keyboard_lock_path} param1=unlock terminal=false refresh=true"
+        )
+    else:
+        print(
+            f"🔒 Lock Keyboard | bash={keyboard_lock_path} param1=lock terminal=false refresh=true"
+        )
+    print(
+        f"--Unlock shortcut: ⌘⌃⌥K | color=gray size=10"
+    )
+else:
+    print("🔒 Lock Keyboard (not found) | color=gray")
 print(
     "📂 Disk Utility | shell=bash param1=-c param2='open -a \"Disk Utility\"' terminal=false"
 )
@@ -276,4 +323,4 @@ if LOG_DIR.exists():
 
 print("---")
 version_label = f"v{toolkit_version}" if toolkit_version else "version unknown"
-print(f"fuck cleanmymac {version_label} | color=gray size=10")
+print(f"fuck cleanmymac {version_label} | color=gray")

@@ -262,6 +262,10 @@ install_swiftbar() {
                 cp "$plugin_src" "$plugin_dst"
                 chmod +x "$plugin_dst"
             fi
+            if [[ -f "$INSTALL_DIR/swiftbar/keyboard-lock.py" ]]; then
+                cp "$INSTALL_DIR/swiftbar/keyboard-lock.py" "$swiftbar_dir/keyboard-lock.py"
+                chmod +x "$swiftbar_dir/keyboard-lock.py"
+            fi
             rm -rf "$swiftbar_dir/README.md"
             defaults write com.ameba.SwiftBar PluginDirectory "$swiftbar_dir" 2>/dev/null || true
             print_success "SwiftBar plugin installed"

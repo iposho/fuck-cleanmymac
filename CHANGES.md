@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.2 (2026-06-22)
+
+### New
+
+- **Keyboard Lock** — SwiftBar menu action to block keyboard input for cleaning; unlock via menu or ⌘⌃⌥K; mouse and display stay active
+
 ## 2.2.1 (2026-06-22)
 
 ### New

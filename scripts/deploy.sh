@@ -54,6 +54,7 @@ done
 SWIFTBAR_DIR="$HOME/Library/Application Support/SwiftBar/Plugins"
 PLUGIN_NAME="system-monitor.5s.py"
 PLUGIN_SRC="$INSTALL_DIR/swiftbar/$PLUGIN_NAME"
+LOCK_SRC="$INSTALL_DIR/swiftbar/keyboard-lock.py"
 
 if [ -f "$SWIFTBAR_DIR/$PLUGIN_NAME" ]; then
     SWIFTBAR_PLUGIN="$SWIFTBAR_DIR/$PLUGIN_NAME"
@@ -74,12 +75,21 @@ if [ -n "$SWIFTBAR_PLUGIN" ]; then
     fi
     rm -rf "$SWIFTBAR_DIR/README.md"
     defaults write com.ameba.SwiftBar PluginDirectory "$SWIFTBAR_DIR" 2>/dev/null || true
+    if [ -f "$LOCK_SRC" ]; then
+        cp "$LOCK_SRC" "$SWIFTBAR_DIR/keyboard-lock.py"
+        chmod +x "$SWIFTBAR_DIR/keyboard-lock.py"
+        echo "   ✅ keyboard-lock.py updated"
+    fi
 elif [ -f "$PLUGIN_SRC" ]; then
     mkdir -p "$SWIFTBAR_DIR"
     cp "$PLUGIN_SRC" "$SWIFTBAR_DIR/$PLUGIN_NAME"
     chmod +x "$SWIFTBAR_DIR/$PLUGIN_NAME"
     rm -rf "$SWIFTBAR_DIR/README.md"
     defaults write com.ameba.SwiftBar PluginDirectory "$SWIFTBAR_DIR" 2>/dev/null || true
+    if [ -f "$LOCK_SRC" ]; then
+        cp "$LOCK_SRC" "$SWIFTBAR_DIR/keyboard-lock.py"
+        chmod +x "$SWIFTBAR_DIR/keyboard-lock.py"
+    fi
     echo "   ✅ SwiftBar plugin installed"
 else
     echo "   ℹ️  SwiftBar plugin not installed"
