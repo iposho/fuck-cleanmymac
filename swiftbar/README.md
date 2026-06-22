@@ -38,6 +38,8 @@ If you prefer to install it manually:
 
 The plugin refreshes every **5 seconds** (as indicated by the `.5s` in the filename). To change the interval, simply rename the file (e.g., to `.10s.py` for 10 seconds).
 
+> **Important:** Point SwiftBar's plugin folder to `~/Library/Application Support/SwiftBar/Plugins`, not the repo's `swiftbar/` directory. The repo folder contains `README.md` and other non-plugin files. If you use the repo folder for development, keep `swiftbar/.swiftbarignore` in place so SwiftBar skips documentation and cache files.
+
 ---
 
 **Made with ❤️ for SwiftBar users.**

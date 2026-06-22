@@ -69,8 +69,18 @@ if [ -n "$SWIFTBAR_PLUGIN" ]; then
     else
         echo "   ⚠️  SwiftBar plugin is a copy — updating..."
         cp "$PLUGIN_SRC" "$SWIFTBAR_PLUGIN"
+        chmod +x "$SWIFTBAR_PLUGIN"
         echo "   ✅ SwiftBar plugin updated"
     fi
+    rm -rf "$SWIFTBAR_DIR/README.md"
+    defaults write com.ameba.SwiftBar PluginDirectory "$SWIFTBAR_DIR" 2>/dev/null || true
+elif [ -f "$PLUGIN_SRC" ]; then
+    mkdir -p "$SWIFTBAR_DIR"
+    cp "$PLUGIN_SRC" "$SWIFTBAR_DIR/$PLUGIN_NAME"
+    chmod +x "$SWIFTBAR_DIR/$PLUGIN_NAME"
+    rm -rf "$SWIFTBAR_DIR/README.md"
+    defaults write com.ameba.SwiftBar PluginDirectory "$SWIFTBAR_DIR" 2>/dev/null || true
+    echo "   ✅ SwiftBar plugin installed"
 else
     echo "   ℹ️  SwiftBar plugin not installed"
 fi

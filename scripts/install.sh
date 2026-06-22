@@ -255,9 +255,17 @@ install_swiftbar() {
         mkdir -p "$swiftbar_dir"
 
         if [[ -f "$plugin_src" ]]; then
-            cp "$plugin_src" "$plugin_dst"
-            chmod +x "$plugin_dst"
+            if [[ -d "$plugin_dst" ]]; then
+                cp "$plugin_src" "$plugin_dst/$(basename "$plugin_dst")"
+                chmod +x "$plugin_dst/$(basename "$plugin_dst")"
+            else
+                cp "$plugin_src" "$plugin_dst"
+                chmod +x "$plugin_dst"
+            fi
+            rm -rf "$swiftbar_dir/README.md"
+            defaults write com.ameba.SwiftBar PluginDirectory "$swiftbar_dir" 2>/dev/null || true
             print_success "SwiftBar plugin installed"
+            print_info "Plugin directory set to: $swiftbar_dir"
             print_info "Restart SwiftBar to see the plugin"
         fi
     else

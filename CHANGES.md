@@ -7,11 +7,13 @@
 - **VERSION file** — toolkit version tracked in repo root; shown in SwiftBar dropdown menu
 - **CPU temperature in menu bar** — SwiftBar status line shows CPU temp when `osx-cpu-temp` or `istats` is available
 - **CPU temperature in health notification** — summary notification includes temp reading
+- **swiftbar/.swiftbarignore** — excludes README and cache files when repo `swiftbar/` folder is used as SwiftBar plugin directory
 
 ### Fixed
 
 - **update.sh / health.sh logging** — both scripts now write to `~/.scripts/logs/update.log` and `health.log` on every run (interactive and cron); previously logs were only created when cron redirected stdout
 - **SwiftBar log links** — log entries and logs folder use `/usr/bin/open` for reliable file opening on macOS
+- **SwiftBar README plugin error** — install/deploy now set plugin directory to `~/Library/Application Support/SwiftBar/Plugins` and remove accidental `README.md` plugin bundles
 
 ### Changed
 
