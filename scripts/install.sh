@@ -24,6 +24,7 @@ set -euo pipefail
 #   --skip-deps     Skip dependency installation
 #   --skip-cron     Skip cron job setup
 #   --skip-swiftbar Skip SwiftBar plugin installation
+#   --no-pull       Do not update the repository (used by deploy.sh)
 #   --uninstall     Remove installation
 #   --help          Show this help message
 # ============================================================================
@@ -41,6 +42,7 @@ INSTALL_DIR="$HOME/.scripts/fuck-cleanmymac"
 CONFIG_DIR="$HOME/.config/fuck-cleanmymac"
 LOG_DIR="$HOME/.scripts/logs"
 BIN_DIR="$HOME/.scripts"
+SWIFTBAR_PLUGIN="system-monitor.5s.py"
 
 # ============================================================================
 # Helper Functions
@@ -67,6 +69,19 @@ print_error() {
 
 print_info() {
     echo -e "  ${BLUE}ℹ${NC} $1"
+}
+
+# Ask a y/N question. Reads from the terminal so it also works with `curl ... | bash`
+# (stdin is the script itself there). Without a terminal the answer is "no".
+ask_yes_no() {
+    local prompt="$1"
+    local reply=""
+    if [[ -r /dev/tty ]] && { : < /dev/tty; } 2>/dev/null; then
+        read -r -p "  $prompt (y/N): " reply < /dev/tty || reply=""
+    else
+        print_info "No terminal available — assuming 'no' for: $prompt"
+    fi
+    [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
 # Check if running on macOS
@@ -130,10 +145,24 @@ install_repository() {
     print_header "Installing Repository"
 
     if [[ -d "$INSTALL_DIR/.git" ]]; then
-        print_info "Repository already exists. Updating..."
-        cd "$INSTALL_DIR"
-        git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
-        print_success "Repository updated"
+        if [[ "$NO_PULL" == true ]]; then
+            print_info "Skipping repository update (--no-pull)"
+        else
+            print_info "Repository already exists. Updating..."
+            local before after
+            before=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo "?")
+            if git -C "$INSTALL_DIR" pull --ff-only origin main; then
+                after=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo "?")
+                if [[ "$before" == "$after" ]]; then
+                    print_success "Already up to date ($after)"
+                else
+                    print_success "Repository updated ($before → $after)"
+                fi
+            else
+                print_warning "Could not update $INSTALL_DIR (local changes or no network). Keeping $before."
+                print_info "To reset it: git -C \"$INSTALL_DIR\" reset --hard origin/main"
+            fi
+        fi
     else
         print_info "Cloning repository to $INSTALL_DIR..."
         git clone "$REPO_URL" "$INSTALL_DIR"
@@ -142,6 +171,7 @@ install_repository() {
 
     # Make scripts executable
     chmod +x "$INSTALL_DIR"/*.sh
+    chmod +x "$INSTALL_DIR"/swiftbar/*.py "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
     print_success "Scripts made executable"
 }
 
@@ -243,39 +273,65 @@ install_optional_deps() {
     print_success "Optional dependencies checked"
 }
 
-# Install SwiftBar plugin
+# SwiftBar plugin folder: respect a folder the user already configured.
+swiftbar_plugin_dir() {
+    local dir="${SWIFTBAR_PLUGIN_DIR:-}"
+    [[ -z "$dir" ]] && dir=$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || true)
+    dir="${dir/#\~/$HOME}"
+    if [[ -z "$dir" ]]; then
+        dir="$HOME/Library/Application Support/SwiftBar/Plugins"
+    fi
+    printf '%s' "$dir"
+}
+
+# Remove copies left by older installers (plain files, per-plugin folders, the helper script
+# that SwiftBar would otherwise run as a separate plugin).
+remove_legacy_swiftbar_files() {
+    local swiftbar_dir="$1"
+    local name
+    for name in "$SWIFTBAR_PLUGIN" "keyboard-lock.py"; do
+        if [[ -e "$swiftbar_dir/$name" || -L "$swiftbar_dir/$name" ]]; then
+            rm -rf "${swiftbar_dir:?}/$name"
+        fi
+    done
+    # Our README copied by old versions (SwiftBar tried to run it); leave any other README alone.
+    if [[ -f "$swiftbar_dir/README.md" ]] && head -1 "$swiftbar_dir/README.md" | grep -q "SwiftBar Plugin"; then
+        rm -f "$swiftbar_dir/README.md"
+    fi
+}
+
+# Install SwiftBar plugin (symlink → updates with the repository)
 install_swiftbar() {
     print_header "Setting Up SwiftBar Plugin"
 
-    local swiftbar_dir="$HOME/Library/Application Support/SwiftBar/Plugins"
-    local plugin_src="$INSTALL_DIR/swiftbar/system-monitor.5s.py"
-    local plugin_dst="$swiftbar_dir/system-monitor.5s.py"
+    local plugin_src="$INSTALL_DIR/swiftbar/$SWIFTBAR_PLUGIN"
 
-    if command -v swiftbar &> /dev/null || [[ -d "/Applications/SwiftBar.app" ]] || [[ -d "$HOME/Applications/SwiftBar.app" ]]; then
-        mkdir -p "$swiftbar_dir"
-
-        if [[ -f "$plugin_src" ]]; then
-            if [[ -d "$plugin_dst" ]]; then
-                cp "$plugin_src" "$plugin_dst/$(basename "$plugin_dst")"
-                chmod +x "$plugin_dst/$(basename "$plugin_dst")"
-            else
-                cp "$plugin_src" "$plugin_dst"
-                chmod +x "$plugin_dst"
-            fi
-            if [[ -f "$INSTALL_DIR/swiftbar/keyboard-lock.py" ]]; then
-                cp "$INSTALL_DIR/swiftbar/keyboard-lock.py" "$swiftbar_dir/keyboard-lock.py"
-                chmod +x "$swiftbar_dir/keyboard-lock.py"
-            fi
-            rm -rf "$swiftbar_dir/README.md"
-            defaults write com.ameba.SwiftBar PluginDirectory "$swiftbar_dir" 2>/dev/null || true
-            print_success "SwiftBar plugin installed"
-            print_info "Plugin directory set to: $swiftbar_dir"
-            print_info "Restart SwiftBar to see the plugin"
-        fi
-    else
+    if [[ ! -d "/Applications/SwiftBar.app" && ! -d "$HOME/Applications/SwiftBar.app" ]] && ! command -v swiftbar &> /dev/null; then
         print_warning "SwiftBar not found. Skipping plugin installation."
-        print_info "Install SwiftBar from: https://swiftbar.app"
+        print_info "Install SwiftBar: brew install --cask swiftbar (or https://swiftbar.app)"
+        return
     fi
+    if [[ ! -f "$plugin_src" ]]; then
+        print_error "Plugin source not found: $plugin_src"
+        return
+    fi
+
+    local swiftbar_dir
+    swiftbar_dir=$(swiftbar_plugin_dir)
+    mkdir -p "$swiftbar_dir"
+    remove_legacy_swiftbar_files "$swiftbar_dir"
+    ln -s "$plugin_src" "$swiftbar_dir/$SWIFTBAR_PLUGIN"
+    chmod +x "$plugin_src" "$INSTALL_DIR/swiftbar/keyboard-lock.py" 2>/dev/null || true
+
+    if [[ -z "${SWIFTBAR_PLUGIN_DIR:-}" && -z "$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || true)" ]]; then
+        defaults write com.ameba.SwiftBar PluginDirectory "$swiftbar_dir" 2>/dev/null || true
+    fi
+
+    # Ask a running SwiftBar to pick up the change
+    open -g "swiftbar://refreshallplugins" 2>/dev/null || true
+
+    print_success "SwiftBar plugin linked: $swiftbar_dir/$SWIFTBAR_PLUGIN → $plugin_src"
+    print_info "Keyboard Cleaning Mode needs SwiftBar in System Settings → Privacy & Security → Accessibility"
 }
 
 # Setup cron job
@@ -283,10 +339,7 @@ setup_cron() {
     print_header "Setting Up Cron Job (Optional)"
 
     echo ""
-    read -p "  Do you want to set up automatic weekly cleanup? (y/N): " -n 1 -r
-    echo ""
-
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if ask_yes_no "Do you want to set up automatic weekly cleanup?"; then
         local cron_entry="0 2 * * 0 $BIN_DIR/cleaner.sh --no-notify >> $LOG_DIR/cron.log 2>&1"
 
         # Check if cron entry already exists
@@ -315,21 +368,25 @@ uninstall() {
         print_info "Removed symlink: $BIN_DIR/${script}.sh"
     done
 
-    # Remove cron jobs
-    crontab -l 2>/dev/null | grep -v "cleaner.sh" | crontab - 2>/dev/null || true
-    print_info "Removed cron jobs"
+    # Remove cron jobs that call our scripts (cleaner/update/health)
+    local current_cron
+    current_cron=$(crontab -l 2>/dev/null || true)
+    if printf '%s\n' "$current_cron" | grep -qE '(cleaner|update|health)\.sh'; then
+        printf '%s\n' "$current_cron" | grep -vE "$BIN_DIR/(cleaner|update|health)\.sh|fuck-cleanmymac/(cleaner|update|health)\.sh" | crontab - 2>/dev/null || true
+        print_info "Removed cron jobs"
+    fi
 
-    # Remove SwiftBar plugin
-    rm -f "$HOME/Library/Application Support/SwiftBar/Plugins/system-monitor.5s.py"
+    # Stop keyboard cleaning mode if it is active, then remove the SwiftBar plugin
+    if [[ -x "$INSTALL_DIR/swiftbar/keyboard-lock.py" ]]; then
+        "$INSTALL_DIR/swiftbar/keyboard-lock.py" unlock >/dev/null 2>&1 || true
+    fi
+    remove_legacy_swiftbar_files "$(swiftbar_plugin_dir)"
     print_info "Removed SwiftBar plugin"
 
     # Ask about removing data
     echo ""
-    read -p "  Do you want to remove logs and configuration? (y/N): " -n 1 -r
-    echo ""
-
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        rm -rf "$LOG_DIR" "$CONFIG_DIR" "$INSTALL_DIR"
+    if ask_yes_no "Do you want to remove logs, configuration and the installed copy?"; then
+        rm -rf "$LOG_DIR" "$CONFIG_DIR" "$INSTALL_DIR" "$HOME/.cache/fuck-cleanmymac"
         print_success "Removed all data"
     else
         print_info "Kept logs and configuration"
@@ -353,6 +410,7 @@ Options:
   --skip-deps      Skip dependency installation
   --skip-cron      Skip cron job setup
   --skip-swiftbar  Skip SwiftBar plugin installation
+  --no-pull        Do not update the installed repository
   --uninstall      Remove installation
   --help           Show this help message
 
@@ -371,6 +429,8 @@ Quick Install:
 
 EOF
 }
+
+NO_PULL=false
 
 main() {
     # Parse arguments
@@ -391,6 +451,10 @@ main() {
                 ;;
             --skip-swiftbar)
                 skip_swiftbar=true
+                shift
+                ;;
+            --no-pull)
+                NO_PULL=true
                 shift
                 ;;
             --uninstall)
@@ -415,11 +479,25 @@ main() {
         exit 0
     fi
 
+    local version="unknown"
+    local version_file=""
+    # Prefer VERSION next to this script's repo root, then installed copy
+    local script_root
+    script_root="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd || true)"
+    if [[ -n "$script_root" && -f "$script_root/VERSION" ]]; then
+        version_file="$script_root/VERSION"
+    elif [[ -f "$INSTALL_DIR/VERSION" ]]; then
+        version_file="$INSTALL_DIR/VERSION"
+    fi
+    if [[ -n "$version_file" ]]; then
+        version=$(tr -d '[:space:]' < "$version_file")
+    fi
+
     # Print welcome
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
     echo "║           fuck-cleanmymac Installation Script               ║"
-    echo "║                  Version 2.1.0                               ║"
+    printf "║                  Version %-6s                             ║\n" "$version"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
 

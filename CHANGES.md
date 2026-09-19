@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.3.0 (2026-09-19)
+
+### New
+
+- **SwiftBar: Keyboard Cleaning Mode** — lock the keyboard for 1 min, 5 min or until unlocked, countdown in the menu bar, ⌘⌃⌥K or menu unlock, display kept awake, Accessibility permission check with a shortcut to Settings
+- **SwiftBar menu redesign** — *Clean Up* submenu with dry-run preview and last-run summary, Top CPU + Top Memory, System Tools submenu, Disk Utility and Keyboard Cleaning Mode as top-level items, settings shortcut
+- **cleaner.sh** — one grouped log line per app, iOS DeviceSupport + old iPhone/iPad firmware, `uv cache prune`, all Chrome/Brave/Edge/Arc profiles, more Electron apps (Windsurf, Discord, Figma, Obsidian, Postman), Xcode simulator caches, per-run counters, `TEMP_FILE_AGE_DAYS`
+- **health.sh** — SMART status, power-on hours, media errors, SSD temperature fallback, memory pressure, `HEALTH_EXTERNAL_IP=false`
+- **lib.sh** — single-instance lock, log rollover at 1 MB, nvm / pnpm / bun / cargo on `PATH` for cron
+- **install.sh** — `--no-pull`, `SWIFTBAR_PLUGIN_DIR`, plugin installed as a symlink to the repository
+
+### Fixed
+
+- Keyboard lock never worked: `fork()` after loading CoreFoundation, 64-bit pointer truncated by ctypes, errors hidden from SwiftBar, unlock delayed until the next key press, `keyboard-lock.py` run by SwiftBar as a separate plugin
+- SwiftBar actions broke on paths with spaces (`Application Support`); a submenu parent cannot be clicked
+- RAM was overstated: "stored in compressor" (uncompressed size) was counted instead of RAM occupied by the compressor
+- SSD wear was never shown (`smartctl -i` has no health data; NVMe drives do not print "SMART support")
+- Firewall status was "Unknown"; battery "~0 years" estimate; empty `Time Remaining: 0:00`
+- `/tmp` cleanup deleted ssh-agent / tmux sockets and files of running programs
+- `~/Library/Caches` always reported ❌ because of a few protected folders (now ⚠️ partial)
+- Telegram media cache was never found (`stable/account-*`); Arc cache path; Chrome only cleaned the Default profile
+- `gem cleanup` removed old gem versions (not a cache) — dropped
+- Log rotation deleted logs during `--dry-run`
+- Config file overrode `--verbose` / `--no-notify`
+- `update.sh` under cron used Homebrew's npm instead of the nvm one, cut scoped npm names (`@scope/pkg` → `pkg`), could not parse pnpm's table output, reported partial Homebrew failures as a total failure
+- `curl … | bash` install: `read` consumed the rest of the script
+- Installer reported "Repository updated" even when `git pull` failed; overwrote a custom SwiftBar plugin folder
+- Uninstall left cron entries for `update.sh` / `health.sh`
+- `deploy.sh` required pushing to GitHub; now deploys local commits
+
+### Changed
+
+- SwiftBar plugin reads CPU / memory from the kernel (no `ps`/`vm_stat`/`sysctl` per refresh): ~150 ms → ~40 ms
+- Faster `fc_run_timeout` polling (100 ms), no `tee` per log line, subprocess-free `fc_count_lines`
+- Health report no longer runs `system_profiler`
+
 ## 2.2.2 (2026-06-22)
 
 ### New

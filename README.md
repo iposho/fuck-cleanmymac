@@ -9,37 +9,43 @@ A comprehensive macOS system cleaner and health monitor toolkit designed to safe
 ### 🧹 **Cleaning (`cleaner.sh`)**
 - **Safe path validation** - prevents accidental deletion of system directories
 - **Dry-run mode** (`--dry-run`) - preview what will be deleted without actually deleting
-- **Docker cleanup** - removes unused containers, images, and volumes
-- **Package manager caches** - cleans npm, yarn, Homebrew, pip, gem caches
-- **Application caches** - targets Cursor, Notion, Slack, Telegram, Spotify, JetBrains IDEs
-- **System maintenance** - cleans user caches, logs, and trash
+- **Docker cleanup** - removes unused containers, images, build cache and anonymous volumes (named volumes are kept)
+- **Package manager caches** - cleans npm, yarn, pnpm, bun, Homebrew, pip, cargo, Xcode DerivedData
+- **Application caches** - Cursor, VS Code, Windsurf, Slack, Notion, Discord, Figma, Telegram media, Spotify, JetBrains, Zed
+- **Browser caches** - every profile of Chrome, Arc, Brave, Edge + Firefox (cookies and history are kept)
+- **System maintenance** - cleans user caches, logs, trash and stale temp files
+- **Safe temp cleanup** - only your own `/tmp` entries older than 2 days; sockets (ssh-agent, tmux) are never touched
+- **Honest reporting** - partially cleaned folders (locked / SIP-protected items) are reported as ⚠️, not ❌
+- **Single instance** - cron and a manual run cannot clean at the same time
 - **Logging** - timestamped logs with automatic rotation (90 days retention)
 - **Notifications** - displays system notifications when cleanup completes
 - **Configuration file** - customize cleaning behavior via `cleaner.conf`
 
 ### 🏥 **Health Monitor (`health.sh`)**
 - **System information** - displays Mac model, CPU, memory, OS version, uptime
-- **Storage health** - shows SSD wear level, data written/read (via smartctl)
-- **Battery status** - reports cycle count, capacity, health assessment, estimated lifespan
-- **Memory usage** - detailed RAM breakdown (wired, active, inactive, free)
+- **Storage health** - SMART status, SSD wear level, data written/read, power-on hours, SSD temperature (via smartctl)
+- **Battery status** - reports cycle count (vs. Apple's 1000-cycle rating), capacity, health assessment
+- **Memory usage** - Activity Monitor-style breakdown (app, wired, compressed) and memory pressure
 - **CPU load** - displays load average and top 5 CPU-consuming processes
-- **Temperature monitoring** - CPU temperature (if tools available)
-- **Network info** - local and external IP addresses
+- **Temperature monitoring** - CPU temperature (if tools available), SSD sensor as a fallback on Apple Silicon
+- **Network info** - local and external IP addresses (`HEALTH_EXTERNAL_IP=false` skips the external lookup)
 - **Security status** - Firewall, FileVault, System Integrity Protection status
 - **System notifications** - sends summary to Notification Center
 
 ### ⚡ **Update Utility (`update.sh`)**
 - **Homebrew updates** - upgrades installed packages
 - **App Store updates** - updates apps via `mas` (if installed)
-- **Node package updates** - updates global `npm` / `pnpm` packages
+- **Node package updates** - updates global `npm` packages of every node it finds (nvm default + Homebrew) and `pnpm` globals
+- **Works from cron** - finds nvm / pnpm / bun / cargo binaries without a login shell
 - **System updates** - checks available macOS updates (`softwareupdate -l`)
-- **Safe execution** - error handling and notifications
+- **Honest summary** - re-checks what is still outdated after upgrading and reports failures
 
 ### 📊 **SwiftBar Plugin**
-- Real-time system monitoring in macOS menu bar (CPU, RAM, disk)
-- Quick access to cleaning, update, and health check functions
-- Collapsible submenus for network processes and operation logs
-- Automatic refresh (configurable interval)
+- Real-time CPU, RAM and free disk in the menu bar
+- Clean Up (with dry-run preview and last-run summary), Update, Health Report
+- **Keyboard Cleaning Mode** - block the keyboard (1 min, 5 min or until you unlock it) to wipe it
+- Top CPU / Top Memory processes with a quit action, logs, handy tools
+- Lightweight: reads CPU/RAM directly from the kernel (~40 ms per refresh)
 
 **[📊 Detailed SwiftBar Guide](swiftbar/README.md)**
 
@@ -196,11 +202,12 @@ Edit the config file to customize:
 - **LOG_DIR** - directory for log files (default: `~/.scripts/logs`)
 - **LOG_RETENTION_DAYS** - auto-delete logs older than N days (default: 90)
 - **CLEAN_SYSTEM_CACHES** - user caches in `~/Library/Caches` (default: true)
-- **CLEAN_APP_CACHES** - Cursor, Notion, Slack, Telegram, Spotify, JetBrains (default: true)
-- **CLEAN_PACKAGE_MANAGERS** - npm, yarn, Homebrew, pip, gem (default: true)
-- **CLEAN_BROWSER_CACHES** - Chrome cache (default: true)
+- **CLEAN_APP_CACHES** - Electron apps/editors, Telegram media, Spotify, JetBrains (default: true)
+- **CLEAN_PACKAGE_MANAGERS** - npm, yarn, pnpm, bun, Homebrew, pip, cargo, Xcode (default: true)
+- **CLEAN_BROWSER_CACHES** - Chrome, Arc, Brave, Edge, Firefox caches (default: true)
 - **CLEAN_TRASH** - empty Trash (default: true)
-- **CLEAN_TEMP_FILES** - `/tmp`, `/var/tmp` (default: true)
+- **CLEAN_TEMP_FILES** - stale entries in `/tmp`, `/var/tmp` (default: true)
+- **TEMP_FILE_AGE_DAYS** - minimum age of temp entries to delete (default: 2)
 - **CLEAN_DOCKER** - Docker system prune (default: true)
 - **SHOW_NOTIFICATION** - macOS notification after cleanup (default: true)
 
@@ -243,9 +250,9 @@ LOG_RETENTION_DAYS=180
 ## Safety Features
 
 ### Path Validation
-- Prevents deletion outside user's home directory (`$HOME`)
-- Blocks dangerous system paths: `/`, `/System`, `/usr`, `/bin`, `/sbin`, `/etc`, `/private`
-- Explicitly allows system temp directories (`/tmp`, `/var/tmp`) for safe cleanup
+- Prevents deletion outside user's home directory (`$HOME`) and refuses `$HOME` itself, `~/Library`, `~/Documents`, `~/Desktop`
+- Blocks dangerous system paths: `/`, `/System`, `/usr`, `/bin`, `/sbin`, `/etc`, `/private`, `/Library`, `/Applications`
+- Temp directories (`/tmp`, `/var/tmp`) are cleaned by age and ownership only
 - Validates all paths before deletion
 
 ### Dry-run Mode
@@ -256,7 +263,7 @@ LOG_RETENTION_DAYS=180
 ### Logging
 - Every cleanup operation is logged with timestamp
 - Includes success/failure status for each action
-- Auto-rotates old logs
+- Auto-rotates old logs; `update.log` / `health.log` roll over at 1 MB
 
 ### Pre-checks
 - Validates directories exist before deletion
@@ -329,7 +336,7 @@ brew install smartmontools
 
 ## Performance Notes
 
-- Full cleanup typically takes 5-30 seconds depending on system state
+- Full cleanup typically takes 10-60 seconds depending on system state (Homebrew cleanup is the slowest part)
 - Dry-run is slightly faster as it doesn't delete files
 - Health check completes in 2-5 seconds
 - SwiftBar plugin refreshes every 5 seconds
@@ -346,11 +353,11 @@ brew install smartmontools
 If you develop locally and have the toolkit installed at `~/.scripts/fuck-cleanmymac`, use the deploy script to sync:
 
 ```bash
-./scripts/deploy.sh          # fetch + reset installed copy to match GitHub
-./scripts/deploy.sh --push   # push local changes first, then deploy
+./scripts/deploy.sh          # deploy local commits of `main` (no push, works offline)
+./scripts/deploy.sh --push   # push to GitHub first, then deploy
 ```
 
-The script also copies the SwiftBar plugin if it's installed as a regular file (not a symlink).
+Only committed changes are deployed. The script then re-runs the installer (`--no-pull --skip-deps --skip-cron`) to refresh the command symlinks and the SwiftBar plugin symlink.
 
 ## Project Structure
 
@@ -362,7 +369,8 @@ fuck-cleanmymac/
 ├── lib.sh                  # Shared shell helpers (PATH, notify, logging)
 ├── cleaner.conf            # Configuration template
 ├── swiftbar/
-│   └── system-monitor.5s.py  # SwiftBar menu bar plugin
+│   ├── system-monitor.5s.py  # SwiftBar menu bar plugin
+│   └── keyboard-lock.py      # Keyboard Cleaning Mode helper (not a plugin)
 ├── scripts/
 │   ├── install.sh          # Auto-installer
 │   ├── uninstall.sh        # Uninstaller

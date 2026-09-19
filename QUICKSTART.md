@@ -51,7 +51,7 @@ Output shows exactly what will be deleted with `🔍` prefix.
 cleaner.sh
 ```
 
-Takes 5-30 seconds depending on what needs cleaning.
+Takes 10-60 seconds depending on what needs cleaning. Preview first with `cleaner.sh --dry-run`.
 
 ### Check System Health
 
@@ -147,7 +147,7 @@ update.sh                       # Check for updates
 ## Uninstall
 
 ```bash
-./install.sh --uninstall
+./scripts/uninstall.sh      # or: ./scripts/install.sh --uninstall
 ```
 
 Or manually:
@@ -156,7 +156,8 @@ Or manually:
 rm -rf ~/.scripts/fuck-cleanmymac
 rm -f ~/.scripts/cleaner.sh ~/.scripts/health.sh ~/.scripts/update.sh
 rm -rf ~/.config/fuck-cleanmymac
-rm -rf ~/.scripts/logs
+rm -rf ~/.scripts/logs ~/.cache/fuck-cleanmymac
+rm -f "$HOME/Library/Application Support/SwiftBar/Plugins/system-monitor.5s.py"
 ```
 
 ## Troubleshooting

@@ -16,6 +16,7 @@ The main installation script. It automates the setup process including directory
 - `--skip-deps`: Skip optional dependency installation (smartmontools, mas, etc.).
 - `--skip-cron`: Skip setting up the automatic weekly cleanup job.
 - `--skip-swiftbar`: Skip SwiftBar plugin installation.
+- `--no-pull`: Do not update the installed repository (used by `deploy.sh`).
 - `--uninstall`: Alias for running the uninstallation logic.
 - `--help`: Show all available options.
 
@@ -33,13 +34,15 @@ It will remove symlinks, cron jobs, and SwiftBar plugins. It asks for confirmati
 ---
 
 ### 📤 [deploy.sh](deploy.sh)
-A development utility to sync local changes from the repository to the installed location in `~/.scripts/`.
+A development utility to deploy the local `main` branch (committed changes only, no network needed) to the installed copy in `~/.scripts/fuck-cleanmymac`, then refresh symlinks and the SwiftBar plugin link.
 
 **Usage:**
 ```bash
 ./scripts/deploy.sh [--push]
 ```
 - `--push`: Pushes changes to the remote GitHub repository before deploying locally.
+
+The installer reads prompts from the terminal, so `curl … | bash` works; without a terminal every question is answered "no". Set `SWIFTBAR_PLUGIN_DIR` to install the plugin into a different folder.
 
 ## Troubleshooting Installation
 
