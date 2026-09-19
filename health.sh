@@ -487,7 +487,12 @@ echo "════════════════════════�
 echo ""
 
 if [ -z "$MESSAGE" ]; then
-    MESSAGE="SSD wear: ${PERCENT_USED:+$PERCENT_USED%}${PERCENT_USED:-N/A} | Battery: ${MAX_CAPACITY:+$MAX_CAPACITY%}${MAX_CAPACITY:-N/A} | Memory: $PRESSURE_TEXT | CPU: $LOAD_STATUS"
+    SSD_MSG="N/A"
+    [ -n "$PERCENT_USED" ] && SSD_MSG="${PERCENT_USED}%"
+    BATTERY_MSG="N/A"
+    [ -n "$MAX_CAPACITY" ] && BATTERY_MSG="${MAX_CAPACITY}%"
+    MESSAGE="SSD wear: $SSD_MSG | Battery: $BATTERY_MSG | Memory: $PRESSURE_TEXT | CPU: $LOAD_STATUS"
 fi
 
-fc_notify "$TITLE" "$MESSAGE"
+echo "Summary: $MESSAGE"
+[ "${FC_NO_NOTIFY:-false}" = true ] || fc_notify "$TITLE" "$MESSAGE"

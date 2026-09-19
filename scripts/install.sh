@@ -37,12 +37,13 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO_URL="https://github.com/iposho/fuck-cleanmymac.git"
+REPO_URL="${FC_REPO_URL:-https://github.com/iposho/fuck-cleanmymac.git}"
 INSTALL_DIR="$HOME/.scripts/fuck-cleanmymac"
 CONFIG_DIR="$HOME/.config/fuck-cleanmymac"
 LOG_DIR="$HOME/.scripts/logs"
 BIN_DIR="$HOME/.scripts"
 SWIFTBAR_PLUGIN="system-monitor.5s.py"
+BACKUP_DIR="$BIN_DIR/backups/$(date +%Y%m%d_%H%M%S)"
 
 # ============================================================================
 # Helper Functions
@@ -82,6 +83,39 @@ ask_yes_no() {
         print_info "No terminal available — assuming 'no' for: $prompt"
     fi
     [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]
+}
+
+# ----------------------------------------------------------------------------
+# Ownership: never delete what we did not create
+# ----------------------------------------------------------------------------
+
+# A symlink created by a fuck-cleanmymac install (points into a fuck-cleanmymac checkout).
+is_our_symlink() {
+    local target
+    [[ -L "$1" ]] || return 1
+    target=$(readlink "$1")
+    [[ "$target" == "$INSTALL_DIR/"* || "$target" == */fuck-cleanmymac/* ]]
+}
+
+# Move an existing file/folder out of the way instead of deleting it.
+backup_path() {
+    local path="$1"
+    mkdir -p "$BACKUP_DIR"
+    local dest="$BACKUP_DIR/$(basename "$path")"
+    [[ -e "$dest" || -L "$dest" ]] && dest="$dest.$$"
+    mv "$path" "$dest"
+    print_warning "Existing $path moved to $dest"
+}
+
+# Our old symlink → replaced; anything else (regular file, folder, foreign link) → backed up.
+place_symlink() {
+    local src="$1" dst="$2"
+    if is_our_symlink "$dst"; then
+        rm -f "$dst"
+    elif [[ -e "$dst" || -L "$dst" ]]; then
+        backup_path "$dst"
+    fi
+    ln -s "$src" "$dst"
 }
 
 # Check if running on macOS
@@ -145,6 +179,8 @@ install_repository() {
     print_header "Installing Repository"
 
     if [[ -d "$INSTALL_DIR/.git" ]]; then
+        # chmod +x by older installers must not count as a local change that blocks updates.
+        git -C "$INSTALL_DIR" config core.fileMode false
         if [[ "$NO_PULL" == true ]]; then
             print_info "Skipping repository update (--no-pull)"
         else
@@ -166,13 +202,16 @@ install_repository() {
     else
         print_info "Cloning repository to $INSTALL_DIR..."
         git clone "$REPO_URL" "$INSTALL_DIR"
+        git -C "$INSTALL_DIR" config core.fileMode false
         print_success "Repository cloned"
     fi
 
-    # Make scripts executable
-    chmod +x "$INSTALL_DIR"/*.sh
-    chmod +x "$INSTALL_DIR"/swiftbar/*.py "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
-    print_success "Scripts made executable"
+    # Git already stores the executable bit; this only repairs copies that lost it.
+    local f
+    for f in "$INSTALL_DIR"/{cleaner,health,update,doctor,lib}.sh "$INSTALL_DIR"/scripts/*.sh "$INSTALL_DIR"/swiftbar/*.py; do
+        [[ -f "$f" ]] && chmod +x "$f"
+    done
+    print_success "Scripts are executable"
 }
 
 # Create symlinks
@@ -180,14 +219,12 @@ create_symlinks() {
     print_header "Creating Symlinks"
 
     # Create symlinks in BIN_DIR
-    for script in cleaner health update; do
+    for script in cleaner health update doctor; do
         local src="$INSTALL_DIR/${script}.sh"
         local dst="$BIN_DIR/${script}.sh"
 
         if [[ -f "$src" ]]; then
-            # Remove existing symlink if it exists
-            rm -f "$dst"
-            ln -s "$src" "$dst"
+            place_symlink "$src" "$dst"
             print_success "Created symlink: $dst"
         fi
     done
@@ -290,14 +327,44 @@ remove_legacy_swiftbar_files() {
     local swiftbar_dir="$1"
     local name
     for name in "$SWIFTBAR_PLUGIN" "keyboard-lock.py"; do
-        if [[ -e "$swiftbar_dir/$name" || -L "$swiftbar_dir/$name" ]]; then
-            rm -rf "${swiftbar_dir:?}/$name"
+        if is_our_symlink "$swiftbar_dir/$name"; then
+            rm -f "$swiftbar_dir/$name"
+        elif [[ -e "$swiftbar_dir/$name" || -L "$swiftbar_dir/$name" ]]; then
+            # Old copies (files or per-plugin folders) leave the plugin folder so SwiftBar stops running them.
+            backup_path "$swiftbar_dir/$name"
         fi
     done
     # Our README copied by old versions (SwiftBar tried to run it); leave any other README alone.
     if [[ -f "$swiftbar_dir/README.md" ]] && head -1 "$swiftbar_dir/README.md" | grep -q "SwiftBar Plugin"; then
         rm -f "$swiftbar_dir/README.md"
     fi
+}
+
+# The plugin runs with `/usr/bin/env python3` and needs Python 3.8+ with ctypes.
+check_swiftbar_python() {
+    local plugin_src="$1" py version
+    py=$(command -v python3 || true)
+    if [[ -z "$py" ]]; then
+        print_error "python3 not found — the SwiftBar plugin needs Python 3.8+"
+        print_info "Install it with: xcode-select --install  (or: brew install python)"
+        return 1
+    fi
+    if ! version=$("$py" -c 'import sys, ctypes; assert sys.version_info >= (3, 8); print("%d.%d" % sys.version_info[:2])' 2>/dev/null); then
+        print_error "$py is not a usable Python 3.8+ — SwiftBar plugin skipped"
+        print_info "Install Python with: xcode-select --install  (or: brew install python)"
+        return 1
+    fi
+    print_success "Python $version ($py)"
+
+    chmod +x "$plugin_src" "$INSTALL_DIR/swiftbar/keyboard-lock.py" 2>/dev/null || true
+    # Smoke test: the plugin must print its menu bar line without errors.
+    local out
+    if ! out=$("$py" "$plugin_src" 2>&1) || [[ -z "$out" ]]; then
+        print_error "SwiftBar plugin failed its test run:"
+        printf '%s\n' "$out" | tail -5 | sed 's/^/      /'
+        return 1
+    fi
+    print_success "Plugin test run OK: $(printf '%s' "$out" | head -1 | sed 's/ |.*//')"
 }
 
 # Install SwiftBar plugin (symlink → updates with the repository)
@@ -316,12 +383,13 @@ install_swiftbar() {
         return
     fi
 
+    check_swiftbar_python "$plugin_src" || return
+
     local swiftbar_dir
     swiftbar_dir=$(swiftbar_plugin_dir)
     mkdir -p "$swiftbar_dir"
     remove_legacy_swiftbar_files "$swiftbar_dir"
     ln -s "$plugin_src" "$swiftbar_dir/$SWIFTBAR_PLUGIN"
-    chmod +x "$plugin_src" "$INSTALL_DIR/swiftbar/keyboard-lock.py" 2>/dev/null || true
 
     if [[ -z "${SWIFTBAR_PLUGIN_DIR:-}" && -z "$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || true)" ]]; then
         defaults write com.ameba.SwiftBar PluginDirectory "$swiftbar_dir" 2>/dev/null || true
@@ -363,9 +431,13 @@ uninstall() {
     print_header "Uninstalling fuck-cleanmymac"
 
     # Remove symlinks
-    for script in cleaner health update; do
-        rm -f "$BIN_DIR/${script}.sh"
-        print_info "Removed symlink: $BIN_DIR/${script}.sh"
+    for script in cleaner health update doctor; do
+        if is_our_symlink "$BIN_DIR/${script}.sh"; then
+            rm -f "$BIN_DIR/${script}.sh"
+            print_info "Removed symlink: $BIN_DIR/${script}.sh"
+        elif [[ -e "$BIN_DIR/${script}.sh" ]]; then
+            print_warning "Kept $BIN_DIR/${script}.sh — not a symlink created by the installer"
+        fi
     done
 
     # Remove cron jobs that call our scripts (cleaner/update/health)
@@ -527,12 +599,13 @@ main() {
     echo ""
     echo "  Usage:"
     echo "    ~/.scripts/cleaner.sh        # Run cleanup"
-    echo "    ~/.scripts/cleaner.sh --dry-run  # Preview"
+    echo "    ~/.scripts/cleaner.sh --scan # Preview: sizes, paths, reasons"
     echo "    ~/.scripts/health.sh         # System health"
     echo "    ~/.scripts/update.sh         # Check updates"
+    echo "    ~/.scripts/doctor.sh         # Check the setup"
     echo ""
     echo "  Or add to PATH and run from anywhere:"
-    echo "    cleaner.sh --help"
+    echo "    cleaner.sh --help  (--scan, --plan, --apply)"
     echo "    health.sh"
     echo "    update.sh"
     echo ""

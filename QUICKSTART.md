@@ -5,72 +5,79 @@ Get **fuck-cleanmymac** up and running in minutes.
 ## Installation (One Command)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/scripts/install.sh | bash
 ```
 
 That's it! The installer will:
-- Clone the repository
-- Create necessary directories
-- Set up symlinks in `~/.scripts`
-- Add scripts to your PATH
+- Clone the repository to `~/.scripts/fuck-cleanmymac`
+- Link `cleaner.sh`, `health.sh`, `update.sh`, `doctor.sh` into `~/.scripts` and add it to your PATH
+- Create `~/.config/fuck-cleanmymac/cleaner.conf`
+- Link the SwiftBar plugin if SwiftBar is installed
 - Ask if you want to set up automatic cleanup
+
+Files it would replace are moved to `~/.scripts/backups/`, never deleted.
+
+Then check the setup:
+
+```bash
+doctor.sh
+```
 
 ## After Installation
 
-You can now use the scripts from anywhere:
-
 ```bash
-# See what will be cleaned (safe to run)
-cleaner.sh --dry-run
-
-# Run actual cleanup
-cleaner.sh
-
-# Check system health
-health.sh
-
-# Check for updates
-update.sh
+cleaner.sh --scan      # What would be cleaned: sizes, paths, reasons (deletes nothing)
+cleaner.sh             # Clean now
+health.sh              # System health report
+update.sh              # Update Homebrew, App Store, npm/pnpm; check macOS updates
+doctor.sh              # Diagnose dependencies, permissions, config, SwiftBar, schedule
 ```
 
 ## Common Tasks
 
-### Preview Before Cleaning
-
-Always preview first with `--dry-run`:
+### See what will be cleaned
 
 ```bash
-cleaner.sh --dry-run
+cleaner.sh --scan
 ```
 
-Output shows exactly what will be deleted with `🔍` prefix.
+Every category shows its size, the folder, how many items and why it is safe to remove. Skipped targets are listed with the reason (disabled in config, Docker not running, temp files too recent…).
 
-### Run Cleanup
+### Review a plan, then clean exactly that
+
+```bash
+cleaner.sh --plan                                        # save the plan
+open -t ~/.cache/fuck-cleanmymac/cleanup-plan.tsv        # review it
+cleaner.sh --apply                                       # execute it
+```
+
+`--apply` re-checks every path. Files that changed or appeared after the plan was made are kept.
+
+### Run cleanup
 
 ```bash
 cleaner.sh
 ```
 
-Takes 10-60 seconds depending on what needs cleaning. Preview first with `cleaner.sh --dry-run`.
+Takes 10–60 seconds depending on what needs cleaning.
 
-### Check System Health
+### Check system health
 
 ```bash
 health.sh
 ```
 
-Shows:
-- 💾 Storage & SSD health
-- 🔋 Battery status
-- 🧠 Memory usage
-- ⚡ CPU load
-- 🌡️ Temperature
-- 🌐 Network info
-- 🔒 Security status
+Shows storage & SSD health, battery, memory, CPU load, temperature, network and security status.
 
-### Customize Behavior
+### Something does not work?
 
-Edit the configuration file:
+```bash
+doctor.sh            # add --online to also check for toolkit updates
+```
+
+It checks dependencies, the installation, `cleaner.conf` (typos, invalid values), permissions (Trash, Accessibility for SwiftBar), the SwiftBar plugin, cron jobs and recent failures — and prints how to fix each problem.
+
+### Customize behavior
 
 ```bash
 nano ~/.config/fuck-cleanmymac/cleaner.conf
@@ -78,144 +85,84 @@ nano ~/.config/fuck-cleanmymac/cleaner.conf
 
 Common settings:
 ```bash
-# Disable Docker cleanup
-CLEAN_DOCKER=false
-
-# Keep logs for 180 days instead of 90
-LOG_RETENTION_DAYS=180
-
-# Disable notifications
-SHOW_NOTIFICATION=false
+CLEAN_DOCKER=false          # Disable Docker cleanup
+LOG_RETENTION_DAYS=180      # Keep logs for 180 days instead of 90
+SHOW_NOTIFICATION=false     # Disable notifications
+TEMP_FILE_AGE_DAYS=7        # Only remove temp files older than a week
 ```
 
-### Set Up Automatic Weekly Cleanup
+### Set up automatic weekly cleanup
 
-During installation, you'll be asked about this. To enable it manually:
+The installer asks about this. To enable it manually:
 
 ```bash
-# cleaner.sh writes its own log, no >> redirect needed
-0 9 * * 1 ~/.scripts/cleaner.sh 2>&1
+(crontab -l 2>/dev/null; echo '0 9 * * 1 ~/.scripts/cleaner.sh --no-notify') | crontab -
 ```
 
-Add to crontab with: `crontab -l | { cat; echo '0 9 * * 1 ~/.scripts/cleaner.sh 2>&1'; } | crontab -`
+cron does not run while the Mac sleeps — pick a time when it is usually awake. To empty the Trash from cron, give `/usr/sbin/cron` Full Disk Access (`doctor.sh` tells you when it is needed).
 
-## Daily Workflow
-
-### Morning Check (2 minutes)
+## Logs
 
 ```bash
-# Check system health
-health.sh
-
-# Check for updates
-update.sh
+ls -lh ~/.scripts/logs/                      # cleaner_*.log, update.log, health.log
+open "$(ls -t ~/.scripts/logs/cleaner_*.log | head -1)"   # latest cleanup report
 ```
 
-### Weekly Cleanup (5 minutes)
+## CLI Reference
 
 ```bash
-# Preview what will be cleaned
-cleaner.sh --dry-run
+cleaner.sh                  # Clean now
+cleaner.sh --scan           # Preview with sizes (alias: --dry-run, -n)
+cleaner.sh --plan [FILE]    # Save a cleanup plan
+cleaner.sh --apply [FILE]   # Execute a saved plan
+cleaner.sh -v               # Verbose (every folder, skipped targets)
+cleaner.sh --no-notify      # No notification
+cleaner.sh --help
 
-# Run if preview looks good
-cleaner.sh
-```
-
-### View Logs
-
-```bash
-# See latest cleanup logs
-ls -lh ~/.scripts/logs/
-
-# View latest log
-tail -f ~/.scripts/logs/cleaner_*.log
-```
-
-## CLI Options Quick Reference
-
-```bash
-cleaner.sh                      # Run full cleanup
-cleaner.sh --dry-run            # Preview (safe)
-cleaner.sh --dry-run --verbose  # Detailed preview
-cleaner.sh --no-notify          # No notifications
-cleaner.sh --help               # Show all options
-
-health.sh                       # System health report
-update.sh                       # Check for updates
+health.sh                   # System health report
+update.sh                   # Updates; exits non-zero if a source could not be checked
+doctor.sh [--online]        # Diagnose the setup; exits non-zero on problems
 ```
 
 ## Uninstall
 
 ```bash
-./scripts/uninstall.sh      # or: ./scripts/install.sh --uninstall
+~/.scripts/fuck-cleanmymac/scripts/uninstall.sh
 ```
 
-Or manually:
-
-```bash
-rm -rf ~/.scripts/fuck-cleanmymac
-rm -f ~/.scripts/cleaner.sh ~/.scripts/health.sh ~/.scripts/update.sh
-rm -rf ~/.config/fuck-cleanmymac
-rm -rf ~/.scripts/logs ~/.cache/fuck-cleanmymac
-rm -f "$HOME/Library/Application Support/SwiftBar/Plugins/system-monitor.5s.py"
-```
+It removes only what the installer created (its symlinks, its cron jobs, the SwiftBar plugin link) and asks before deleting logs and configuration.
 
 ## Troubleshooting
 
 ### "Command not found" after installation
 
-Restart your terminal or run:
-
-```bash
-source ~/.zshrc
-```
+Open a new terminal or run `source ~/.zshrc`.
 
 ### Installation script fails
 
-Try manual installation:
+Run it from a clone to see the full output:
 
 ```bash
 git clone https://github.com/iposho/fuck-cleanmymac.git
 cd fuck-cleanmymac
-chmod +x *.sh
-./cleaner.sh --dry-run
+./scripts/install.sh
 ```
 
-### Need more features?
+The scripts need the whole checkout (`lib.sh` next to them) — do not copy single `.sh` files.
 
-Check out the full documentation:
-- 📖 **README.md** - Complete feature list
-- ⚙️ **Configuration** - All config options
-- 🔧 **Troubleshooting** - Common issues
+### Anything else
 
-### Want to help?
-
-Found a bug? Have a feature request?
-
-Open an issue: <https://github.com/iposho/fuck-cleanmymac/issues>
-
-## Next Steps
-
-1. ✅ Run `cleaner.sh --dry-run` to see what it does
-2. ✅ Read the full README.md for advanced features
-3. ✅ Customize `~/.config/fuck-cleanmymac/cleaner.conf`
-4. ✅ Set up automatic cleanup (optional)
-5. ✅ Install optional tools (smartmontools, osx-cpu-temp)
+`doctor.sh` first, then the [README](README.md). Found a bug? <https://github.com/iposho/fuck-cleanmymac/issues>
 
 ## Key Features at a Glance
 
 | Feature | Command |
 |---------|---------|
-| **Safe Preview** | `cleaner.sh --dry-run` |
-| **Full Cleanup** | `cleaner.sh` |
-| **System Check** | `health.sh` |
+| **Preview with sizes** | `cleaner.sh --scan` |
+| **Plan → apply** | `cleaner.sh --plan`, then `cleaner.sh --apply` |
+| **Full cleanup** | `cleaner.sh` |
+| **System check** | `health.sh` |
 | **Updates** | `update.sh` |
-| **Configuration** | Edit `~/.config/fuck-cleanmymac/cleaner.conf` |
-| **Logs** | View `~/.scripts/logs/` (`update.log`, `health.log`, `cleaner_*.log`) |
-| **Help** | `cleaner.sh --help` |
-
----
-
-**That's it!** You now have a powerful system cleaner and health monitor. 🎉
-
-For more info: `cleaner.sh --help` or read the full [README.md](README.md)
+| **Setup check** | `doctor.sh` |
+| **Configuration** | `~/.config/fuck-cleanmymac/cleaner.conf` |
+| **Logs** | `~/.scripts/logs/` |

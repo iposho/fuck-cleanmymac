@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.4.0 (2026-09-19)
+
+### New
+
+- **Cleanup scan** — `cleaner.sh --scan` (alias `--dry-run`): size of every category, exact folders, item counts, why each target is safe to remove, and every skipped target with its reason
+- **Plan → apply** — `cleaner.sh --plan` saves the exact files to remove (with modification times); `cleaner.sh --apply` re-validates every folder and removes only files unchanged since the plan. Commands are whitelisted ids, tampered or foreign plans are refused. A normal run uses the same engine
+- **doctor.sh** — diagnoses dependencies, installation, configuration (typos, invalid values), permissions (Trash/Full Disk Access, Accessibility), the SwiftBar plugin, cron schedule and recent failures, with a fix for each problem; `--online` checks for toolkit updates
+- **SwiftBar** — *Scan*, *Create / Review / Apply Plan* in Clean Up; *Check Setup (doctor)*
+- **tests/run.sh** — end-to-end tests in a throw-away HOME (install, plugin, scan/plan/apply, update failures, keyboard lock, doctor, uninstall)
+
+### Fixed
+
+- `update.sh`: a failed check (Homebrew, App Store, npm, pnpm, macOS) was reported as "up to date"; it is now "could not check" with the reason in the log, and the script exits non-zero
+- Keyboard unlock reported success before the lock process had stopped; unlock now confirms the stop (SIGTERM, then SIGKILL) and reports a failure otherwise. Two simultaneous locks are prevented with an exclusive lock file
+- Installer deleted existing files before linking; they are now moved to `~/.scripts/backups/`. Uninstall removes only its own symlinks
+- Installer `chmod +x` made the installed copy look modified and blocked updates (`core.fileMode=false` now)
+- Cleanup refused every path when `HOME` contained a symlink
+- Health notification showed values twice (`SSD wear: 7%7`)
+- QUICKSTART pointed to a non-existent `/main/install.sh`; manual install copied scripts without `lib.sh`
+
+### Changed
+
+- `fc_setup_path` appends missing tool folders instead of overriding the caller's `PATH`
+- Installer checks Python 3.8+ and test-runs the SwiftBar plugin before linking it
+
+
 ## 2.3.0 (2026-09-19)
 
 ### New

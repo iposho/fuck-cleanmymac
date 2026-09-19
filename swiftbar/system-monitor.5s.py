@@ -23,6 +23,7 @@ PROCESS_CACHE = CACHE_DIR / "swiftbar-processes.cache"
 CPU_TICKS_CACHE = CACHE_DIR / "swiftbar-cpu.ticks"
 TEMP_UNAVAILABLE_FLAG = CACHE_DIR / "swiftbar-no-temp"
 AX_CACHE = CACHE_DIR / "swiftbar-ax.cache"
+CLEANUP_PLAN = CACHE_DIR / "cleanup-plan.tsv"
 PROCESS_CACHE_TTL = 15  # seconds
 TEMP_RETRY_TTL = 600  # re-probe a sensor that returned nothing useful every 10 min
 AX_CACHE_TTL = 30
@@ -308,6 +309,15 @@ def handle_kill(pid_arg: str) -> None:
     sys.exit(0)
 
 
+def format_age(seconds: float) -> str:
+    minutes = int(seconds // 60)
+    if minutes < 60:
+        return f"{max(minutes, 1)} min"
+    if minutes < 48 * 60:
+        return f"{minutes // 60} h"
+    return f"{minutes // 1440} days"
+
+
 def format_log_time(mtime: float) -> str:
     dt = datetime.datetime.fromtimestamp(mtime)
     days = (datetime.date.today() - dt.date()).days
@@ -408,7 +418,12 @@ def main() -> None:
     cleaner_log, cleaner_mtime = latest(list(LOG_DIR.glob("cleaner_*.log")) if LOG_DIR.is_dir() else [])
     print("🧹 Clean Up")
     print(f"--Clean Now | bash={quote(cleaner)} terminal=true")
-    print(f"--Preview — dry run, deletes nothing | bash={quote(cleaner)} param1=--dry-run terminal=true")
+    print(f"--Scan — sizes and paths, deletes nothing | bash={quote(cleaner)} param1=--scan terminal=true")
+    print(f"--Create Cleanup Plan… | bash={quote(cleaner)} param1=--plan terminal=true refresh=true")
+    if CLEANUP_PLAN.is_file():
+        age = format_age(time.time() - CLEANUP_PLAN.stat().st_mtime)
+        print(f"--Review Plan ({age} old) | bash=/usr/bin/open param1=-t param2={quote(CLEANUP_PLAN)} terminal=false")
+        print(f"--Apply Plan | bash={quote(cleaner)} param1=--apply terminal=true refresh=true")
     print("-----")
     if cleaner_log and cleaner_mtime is not None:
         freed = last_cleanup_summary(cleaner_log)
@@ -468,6 +483,9 @@ def main() -> None:
             f"🧩 Update fuck-cleanmymac | bash={quote(installer)} param1=--skip-deps "
             "param2=--skip-cron param3=--skip-swiftbar terminal=true refresh=true"
         )
+    doctor = scripts_dir / "doctor.sh"
+    if doctor.is_file():
+        print(f"🩹 Check Setup (doctor) | bash={quote(doctor)} param1=--online terminal=true")
 
     print("📋 Logs")
     for label, log_path, mtime in (

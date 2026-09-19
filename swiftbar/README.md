@@ -12,7 +12,7 @@ While the keyboard is locked the line starts with `⌨️🔒` (plus a countdown
 
 | Item | What it does |
 | --- | --- |
-| 🧹 **Clean Up** → Clean Now / Preview | Runs `cleaner.sh` in Terminal. *Preview* is a dry run that deletes nothing. Shows when it last ran and how much it freed, opens the last report and `cleaner.conf` |
+| 🧹 **Clean Up** | *Clean Now*; *Scan* (sizes, paths and reasons, deletes nothing); *Create Cleanup Plan…*, then *Review Plan* / *Apply Plan* once a plan exists. Shows when cleanup last ran and how much it freed, opens the last report and `cleaner.conf` |
 | 🚀 **Update Apps & Packages** | Runs `update.sh` (Homebrew, App Store, npm/pnpm globals, macOS update check) |
 | 🩺 **Health Report** | Runs `health.sh` (SSD, battery, memory, security) |
 | 💽 **Disk Utility** | Opens Disk Utility |
@@ -20,6 +20,7 @@ While the keyboard is locked the line starts with `⌨️🔒` (plus a countdown
 | ⚔️ **Top CPU** / 🧠 **Top Memory** | Heaviest processes. Click one of yours to quit it (SIGTERM, SIGKILL after 1.5 s). System processes are shown in grey and cannot be killed from here |
 | 🛠 **System Tools** | Activity Monitor, Storage settings |
 | 🧩 **Update fuck-cleanmymac** | Updates the toolkit itself (`install.sh --skip-deps --skip-cron --skip-swiftbar`) |
+| 🩹 **Check Setup (doctor)** | Runs `doctor.sh --online`: dependencies, installation, config, permissions, plugin, schedule |
 | 📋 **Logs** | Latest cleanup / update / health logs, logs folder |
 
 ## ⌨️ Keyboard Cleaning Mode
@@ -54,6 +55,7 @@ Then SwiftBar → *Refresh All*.
 
 - **Nothing in the menu bar** — check that the plugin is not disabled in SwiftBar (right-click → Plugins). Older installs kept the plugin inside a `system-monitor.5s.py/` folder that SwiftBar may have disabled; re-running the installer replaces it with a symlink.
 - **Keyboard lock does nothing** — grant SwiftBar the Accessibility permission, then try again.
+- **Anything else** — *Check Setup (doctor)* in the menu, or `doctor.sh` in a terminal.
 
 ## Configuration
 

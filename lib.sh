@@ -24,19 +24,23 @@ fc_nvm_bin() {
     printf '%s/bin' "$best"
 }
 
+# Make tools reachable from cron/launchd/SwiftBar without overriding the caller's PATH:
+# missing directories are appended, nvm's default node before Homebrew's.
 fc_setup_path() {
-    local extra="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-    local dir
-    for dir in "$HOME/.local/bin" "$HOME/.cargo/bin" "$HOME/.bun/bin" "$HOME/Library/pnpm"; do
-        [ -d "$dir" ] && extra="$extra:$dir"
-    done
-    export PATH="$extra:$PATH"
-
-    # Mirror an interactive shell: nvm's default node wins over Homebrew's.
-    local nvm_bin
+    local dirs=() dir nvm_bin
     if nvm_bin=$(fc_nvm_bin); then
-        export PATH="$nvm_bin:$PATH"
+        dirs+=("$nvm_bin")
     fi
+    dirs+=(/opt/homebrew/bin /opt/homebrew/sbin /usr/local/bin /usr/bin /bin /usr/sbin /sbin
+        "$HOME/.local/bin" "$HOME/.cargo/bin" "$HOME/.bun/bin" "$HOME/Library/pnpm")
+
+    for dir in "${dirs[@]}"; do
+        case ":$PATH:" in
+            *":$dir:"*) ;;
+            *) [ -d "$dir" ] && PATH="${PATH:+$PATH:}$dir" ;;
+        esac
+    done
+    export PATH
     return 0
 }
 
@@ -183,6 +187,18 @@ fc_run_timeout() {
     fi
 
     wait "$pid" 2>/dev/null
+}
+
+# Run a check command keeping its outcome apart from its output.
+# Sets CHECK_OUT (stdout), CHECK_ERR (stderr) and CHECK_RC (exit code).
+fc_capture() {
+    local err_file
+    err_file=$(mktemp "${TMPDIR:-/tmp}/fc-capture.XXXXXX") || return 1
+    CHECK_OUT=$("$@" 2>"$err_file")
+    CHECK_RC=$?
+    CHECK_ERR=$(cat "$err_file" 2>/dev/null)
+    rm -f "$err_file"
+    return 0
 }
 
 # Count non-blank lines of a string (pure bash, no subprocess).

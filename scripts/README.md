@@ -42,7 +42,15 @@ A development utility to deploy the local `main` branch (committed changes only,
 ```
 - `--push`: Pushes changes to the remote GitHub repository before deploying locally.
 
-The installer reads prompts from the terminal, so `curl … | bash` works; without a terminal every question is answered "no". Set `SWIFTBAR_PLUGIN_DIR` to install the plugin into a different folder.
+The installer reads prompts from the terminal, so `curl … | bash` works; without a terminal every question is answered "no".
+
+**Existing files are never deleted.** Symlinks created by a previous install are replaced; anything else in the way (an old copy of `cleaner.sh`, a plugin folder, your own file with the same name) is moved to `~/.scripts/backups/<timestamp>/`. The uninstaller removes only its own symlinks and cron jobs.
+
+Before linking the SwiftBar plugin the installer checks for Python 3.8+ and runs the plugin once; a failure is shown instead of a silently empty menu bar. The installed copy is set to `core.fileMode=false`, so `chmod` never turns into a local change that blocks updates.
+
+Environment variables:
+- `SWIFTBAR_PLUGIN_DIR` — install the plugin into a different folder
+- `FC_REPO_URL` — clone from another URL or a local path (used by `tests/run.sh`)
 
 ## Troubleshooting Installation
 

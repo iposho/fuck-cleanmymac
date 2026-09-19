@@ -8,7 +8,8 @@ A comprehensive macOS system cleaner and health monitor toolkit designed to safe
 
 ### 🧹 **Cleaning (`cleaner.sh`)**
 - **Safe path validation** - prevents accidental deletion of system directories
-- **Dry-run mode** (`--dry-run`) - preview what will be deleted without actually deleting
+- **Scan** (`--scan`, alias `--dry-run`) - size of every category, the exact folders, item counts, why each is safe to remove, and what was skipped and why
+- **Plan → apply** (`--plan`, `--apply`) - save the list of files to remove, review it, then execute exactly that plan; paths are re-validated and anything changed since the plan is kept
 - **Docker cleanup** - removes unused containers, images, build cache and anonymous volumes (named volumes are kept)
 - **Package manager caches** - cleans npm, yarn, pnpm, bun, Homebrew, pip, cargo, Xcode DerivedData
 - **Application caches** - Cursor, VS Code, Windsurf, Slack, Notion, Discord, Figma, Telegram media, Spotify, JetBrains, Zed
@@ -38,11 +39,21 @@ A comprehensive macOS system cleaner and health monitor toolkit designed to safe
 - **Node package updates** - updates global `npm` packages of every node it finds (nvm default + Homebrew) and `pnpm` globals
 - **Works from cron** - finds nvm / pnpm / bun / cargo binaries without a login shell
 - **System updates** - checks available macOS updates (`softwareupdate -l`)
-- **Honest summary** - re-checks what is still outdated after upgrading and reports failures
+- **Honest summary** - re-checks what is still outdated after upgrading; a source that could not be checked is reported as "could not check" with the reason in the log (never as "up to date"), and the script exits non-zero
+
+### 🩹 **Doctor (`doctor.sh`)**
+- **Dependencies** - git, Python 3.8+ for SwiftBar, Homebrew, smartctl, mas; which npm scheduled runs will use
+- **Installation** - installed copy, local changes that would block updates, available updates (`--online`), command symlinks, PATH
+- **Configuration** - syntax, unknown settings (typos), invalid values, disabled categories
+- **Permissions** - writable log/state folders, Trash access (Full Disk Access), Accessibility for SwiftBar
+- **SwiftBar** - running, plugin link, disabled plugin, leftover copies, plugin test run and refresh time
+- **Schedule** - cron jobs and LaunchAgents, missing scripts, last runs and their failures
+- **State** - running jobs, stale locks, saved cleanup plan
+- Every problem comes with a fix; exits non-zero when something is broken
 
 ### 📊 **SwiftBar Plugin**
 - Real-time CPU, RAM and free disk in the menu bar
-- Clean Up (with dry-run preview and last-run summary), Update, Health Report
+- Clean Up (Clean Now, Scan, Create / Review / Apply Plan, last-run summary), Update, Health Report, Check Setup
 - **Keyboard Cleaning Mode** - block the keyboard (1 min, 5 min or until you unlock it) to wipe it
 - Top CPU / Top Memory processes with a quit action, logs, handy tools
 - Lightweight: reads CPU/RAM directly from the kernel (~40 ms per refresh)
@@ -63,7 +74,7 @@ curl -sL https://raw.githubusercontent.com/iposho/fuck-cleanmymac/main/scripts/i
 This single command will:
 - ✅ Clone the repository to `~/.scripts/fuck-cleanmymac`
 - ✅ Create necessary directories (`~/.scripts`, `~/.config/fuck-cleanmymac`, `~/.scripts/logs`)
-- ✅ Set up symlinks in `~/.scripts` for easy access
+- ✅ Set up symlinks in `~/.scripts` for easy access (existing files are moved to `~/.scripts/backups/`, never deleted)
 - ✅ Add scripts to your PATH (`.zshrc` or `.bashrc`)
 - ✅ Copy configuration template to `~/.config/fuck-cleanmymac/cleaner.conf`
 - ✅ Optionally install dependencies (smartmontools, osx-cpu-temp, mas)
@@ -92,16 +103,16 @@ Once installed, you can use the scripts from anywhere:
 
 ```bash
 cleaner.sh                      # Run cleanup
-cleaner.sh --dry-run            # Preview what will be cleaned
+cleaner.sh --scan               # Preview: sizes, paths, reasons
 health.sh                       # Check system health
 update.sh                       # Check for updates
+doctor.sh                       # Check the setup
 ```
 
 #### Update Existing Installation
-To update an existing installation:
+To update an existing installation (SwiftBar: *Update fuck-cleanmymac*):
 ```bash
-cd ~/.scripts/fuck-cleanmymac
-git pull origin main
+~/.scripts/fuck-cleanmymac/scripts/install.sh --skip-deps --skip-cron
 ```
 
 Or reinstall:
@@ -124,7 +135,7 @@ If you want to remove the toolkit and all its components (symlinks, cron jobs, e
 ```
 
 > [!NOTE]
-> The uninstaller will ask for confirmation before deleting logs and configuration files.
+> The uninstaller removes only what the installer created (its symlinks, its cron jobs, the SwiftBar plugin link) and asks before deleting logs and configuration files.
 
 ---
 
@@ -132,21 +143,29 @@ If you want to remove the toolkit and all its components (symlinks, cron jobs, e
 
 If you prefer to set up manually or the auto-installer doesn't work for you:
 
+The scripts share `lib.sh` and read `VERSION` from their own folder, so keep the checkout in one piece and **link** the scripts instead of copying them (symlinks are resolved to the checkout).
+
 #### 1. Clone the repository
 ```bash
-git clone https://github.com/iposho/fuck-cleanmymac.git
-cd fuck-cleanmymac
-chmod +x cleaner.sh health.sh update.sh
+git clone https://github.com/iposho/fuck-cleanmymac.git ~/.scripts/fuck-cleanmymac
 ```
 
-#### 2. Optional: Add to PATH
+#### 2. Link the commands and add them to PATH
 ```bash
-mkdir -p ~/.scripts
-cp cleaner.sh health.sh update.sh ~/.scripts/
-export PATH="$HOME/.scripts:$PATH"
+for s in cleaner health update doctor; do
+    ln -sf ~/.scripts/fuck-cleanmymac/$s.sh ~/.scripts/$s.sh
+done
+echo 'export PATH="$HOME/.scripts:$PATH"' >> ~/.zshrc
+mkdir -p ~/.config/fuck-cleanmymac
+cp -n ~/.scripts/fuck-cleanmymac/cleaner.conf ~/.config/fuck-cleanmymac/
 ```
 
-#### 3. SwiftBar Plugin (Optional)
+#### 3. Check the result
+```bash
+~/.scripts/doctor.sh
+```
+
+#### 4. SwiftBar Plugin (Optional)
 See [swiftbar/README.md](swiftbar/README.md) for manual installation instructions and feature details.
 
 ## Usage
@@ -156,16 +175,39 @@ See [swiftbar/README.md](swiftbar/README.md) for manual installation instruction
 ./cleaner.sh
 ```
 
-### Dry-run Mode (Preview)
-Preview what will be deleted without actually deleting:
+### Scan (Preview)
+See what would be cleaned — nothing is deleted:
 ```bash
-./cleaner.sh --dry-run
+./cleaner.sh --scan          # alias: --dry-run, -n
 ```
+
+```text
+🌐 Browsers — 483 MB
+   • Chrome cache (all profiles)            483 MB
+      33 folders, 483 items — browser cache; cookies, history and passwords are kept
+🗑  System — 1.3 GB
+   • User caches                            1.3 GB
+      ~/Library/Caches (412 items) — app caches, rebuilt automatically
+⏭  Skipped
+   • Docker: daemon is not running
+   • Temporary files (/tmp): 5 entries kept (newer than 2 days, sockets, system or other users' files)
+📊 Reclaimable: ~1.8 GB in 36 targets (895 files/folders)
+```
+
+### Plan → Apply
+Save the exact list of files, review it, then execute it:
+```bash
+./cleaner.sh --plan                                   # writes ~/.cache/fuck-cleanmymac/cleanup-plan.tsv
+open -t ~/.cache/fuck-cleanmymac/cleanup-plan.tsv     # review
+./cleaner.sh --apply                                  # execute the plan
+```
+
+When applying, every folder is re-validated (safe location, still a real folder, not replaced by a symlink) and only files that still exist **with the same modification time** as in the plan are removed. Files that changed or appeared since are kept and reported. Cleanup commands are stored as ids from a fixed whitelist (e.g. `npm_cache`), never as shell text, and plans that are not yours or are writable by others are refused. The applied plan is renamed to `*.applied`.
 
 ### With Options
 ```bash
-./cleaner.sh --dry-run --verbose    # Detailed preview
-./cleaner.sh --no-notify             # Skip notifications
+./cleaner.sh --scan --verbose    # List every folder and skipped target
+./cleaner.sh --no-notify         # Skip notifications
 ```
 
 ### Help
@@ -181,6 +223,12 @@ Preview what will be deleted without actually deleting:
 ### System Updates
 ```bash
 ./update.sh
+```
+Exits non-zero when a source (Homebrew, App Store, npm, pnpm, macOS) could not be checked; the reason is in `~/.scripts/logs/update.log`.
+
+### Setup Check
+```bash
+./doctor.sh            # --online also checks GitHub for toolkit updates
 ```
 
 ## Configuration
@@ -247,18 +295,21 @@ LOG_RETENTION_DAYS=180
 
 > **Tip:** use `crontab -l` to view and `crontab -` with a pipe to edit without vim.
 
+> **Notes:** cron does not run while the Mac sleeps and does not catch up later — pick a time when the Mac is usually awake. Emptying the Trash from cron needs Full Disk Access for `/usr/sbin/cron`. `doctor.sh` checks the schedule, the scripts it points to and the last runs.
+
 ## Safety Features
 
 ### Path Validation
-- Prevents deletion outside user's home directory (`$HOME`) and refuses `$HOME` itself, `~/Library`, `~/Documents`, `~/Desktop`
-- Blocks dangerous system paths: `/`, `/System`, `/usr`, `/bin`, `/sbin`, `/etc`, `/private`, `/Library`, `/Applications`
+- Deletes only inside your home folder (symlinks resolved) or the temp folders — everything else (`/System`, `/usr`, `/etc`, `/Library`, `/Applications`, …) is refused
+- Refuses `$HOME` itself, `~/Library`, `~/Library/Application Support`, `~/Documents`, `~/Desktop`, and a degenerate `HOME` such as `/`
 - Temp directories (`/tmp`, `/var/tmp`) are cleaned by age and ownership only
-- Validates all paths before deletion
+- Validates all paths before deletion, and again when a plan is applied
 
-### Dry-run Mode
-- Preview exactly what will be deleted
-- No files are actually modified
-- Safe to test new configurations
+### Scan, Plan and Apply
+- `--scan` shows sizes, folders and reasons without modifying anything
+- `--plan` records every file to remove with its modification time
+- `--apply` removes only unchanged files from the plan, re-validates every folder and refuses tampered plans
+- A normal run uses the same plan-and-apply engine internally
 
 ### Logging
 - Every cleanup operation is logged with timestamp
@@ -293,6 +344,8 @@ ls -lh ~/.scripts/logs/
 ```
 
 ## Troubleshooting
+
+Start with **`doctor.sh`** (SwiftBar: *Check Setup*): it checks dependencies, the installation, `cleaner.conf`, permissions, the SwiftBar plugin and scheduled runs, and prints a fix for every problem.
 
 ### Docker cleanup hangs
 The script includes a 5-second timeout for Docker operations. If Docker is unresponsive, it will skip that step.
@@ -337,7 +390,8 @@ brew install smartmontools
 ## Performance Notes
 
 - Full cleanup typically takes 10-60 seconds depending on system state (Homebrew cleanup is the slowest part)
-- Dry-run is slightly faster as it doesn't delete files
+- `--scan` / `--plan` take 5-20 seconds: they measure every folder and ask Homebrew/Docker for reclaimable space
+- `doctor.sh` takes about a second
 - Health check completes in 2-5 seconds
 - SwiftBar plugin refreshes every 5 seconds
 
@@ -366,6 +420,7 @@ fuck-cleanmymac/
 ├── cleaner.sh              # Main cleanup script
 ├── health.sh               # System health monitor
 ├── update.sh               # Package & system updater
+├── doctor.sh               # Setup diagnostics
 ├── lib.sh                  # Shared shell helpers (PATH, notify, logging)
 ├── cleaner.conf            # Configuration template
 ├── swiftbar/
@@ -375,13 +430,15 @@ fuck-cleanmymac/
 │   ├── install.sh          # Auto-installer
 │   ├── uninstall.sh        # Uninstaller
 │   └── deploy.sh           # Dev → installed copy sync
+├── tests/
+│   └── run.sh              # End-to-end tests in a throw-away HOME
 └── README.md
 ```
 
 ## Contributing
 
 Contributions are welcome! Please:
-1. Test changes thoroughly
+1. Run `tests/run.sh` (no network, never touches your real HOME)
 2. Preserve safety features
 3. Update documentation
 4. Follow bash best practices
@@ -393,7 +450,7 @@ MIT License - feel free to use and modify
 ## Disclaimer
 
 These scripts perform system maintenance operations. While extensive safety checks are implemented:
-- Always run `--dry-run` first to preview changes
+- Run `cleaner.sh --scan` (or `--plan`) first to see what will be removed
 - Keep system backups
 - Test in non-critical environments first
 - Use at your own risk
@@ -403,7 +460,7 @@ These scripts perform system maintenance operations. While extensive safety chec
 For issues, questions, or suggestions:
 1. Check troubleshooting section above
 2. Review logs for detailed error information
-3. Test with `--dry-run` mode
+3. Run `doctor.sh` and `cleaner.sh --scan`
 4. Open an issue with error logs
 
 ---

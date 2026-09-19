@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
+import fcntl
 import os
 import select
 import signal
@@ -25,6 +26,9 @@ from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".config" / "fuck-cleanmymac"
 PID_FILE = CONFIG_DIR / "keyboard-lock.pid"
+# Held with flock() by the running daemon for its whole life: guarantees a single lock
+# and tells a live daemon from a stale PID file even after a crash or SIGKILL.
+LOCK_FILE = CONFIG_DIR / "keyboard-lock.lock"
 SCRIPT_MARKER = "keyboard-lock"
 
 DEFAULT_SECONDS = 60
@@ -72,6 +76,33 @@ def open_url(url: str) -> None:
         subprocess.run(["/usr/bin/open", "-g", url], capture_output=True, timeout=3, check=False)
     except Exception:
         pass
+
+
+def _acquire_daemon_lock() -> int | None:
+    """Take the exclusive daemon lock; returns the fd to keep open, or None if taken."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    fd = os.open(LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return None
+    return fd
+
+
+def daemon_running() -> bool:
+    """True while some lock daemon holds LOCK_FILE."""
+    try:
+        fd = os.open(LOCK_FILE, os.O_RDWR)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return True
+    finally:
+        os.close(fd)  # closing also releases our probe lock
+    return False
 
 
 def _pid_is_lock_daemon(pid: int) -> bool:
@@ -174,6 +205,11 @@ def ax_trusted(prompt: bool = False) -> bool:
 
 
 def run_daemon(seconds: int) -> int:
+    lock_fd = _acquire_daemon_lock()  # kept open until the process exits
+    if lock_fd is None:
+        print("error:already-locked", flush=True)
+        return 4
+
     cg = ctypes.CDLL(ctypes.util.find_library("CoreGraphics"))
     cf = ctypes.CDLL(ctypes.util.find_library("CoreFoundation"))
 
@@ -328,6 +364,9 @@ def lock(seconds: int) -> int:
     if answer == "ok":
         notify(f"Keyboard locked {describe(seconds)}. Unlock: SwiftBar menu or ⌘⌃⌥K")
         return 0
+    if answer == "error:already-locked":
+        notify("Keyboard is already locked")
+        return 0
 
     if proc.poll() is None:
         proc.kill()
@@ -347,20 +386,50 @@ def lock(seconds: int) -> int:
     return 1
 
 
+def _wait_for_exit(pid: int, seconds: float) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if not _pid_is_lock_daemon(pid):
+            return True
+        time.sleep(0.1)
+    return not _pid_is_lock_daemon(pid)
+
+
 def unlock() -> int:
+    """Stop the daemon and report success only once it is really gone."""
     state = read_state()
     if not state:
+        if daemon_running():
+            notify("Keyboard lock is running but its PID file is missing — press ⌘⌃⌥K", title="Unlock failed")
+            print("Lock daemon is running without a PID file; press ⌘⌃⌥K.", file=sys.stderr)
+            return 1
         return 0
+
     pid, _ = state
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except OSError:
-        pass
-    for _ in range(20):
-        if not _pid_is_lock_daemon(pid):
+    stopped = False
+    for sig, wait in ((signal.SIGTERM, 2.0), (signal.SIGKILL, 1.0)):
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            stopped = True
             break
-        time.sleep(0.1)
-    PID_FILE.unlink(missing_ok=True)
+        except PermissionError:
+            break
+        if _wait_for_exit(pid, wait):
+            stopped = True
+            break
+
+    # The kernel removes the event tap together with the process; the flock confirms it.
+    if not stopped or daemon_running():
+        notify("Could not stop the keyboard lock — press ⌘⌃⌥K", title="Unlock failed")
+        print(f"Keyboard lock (PID {pid}) is still running; press ⌘⌃⌥K.", file=sys.stderr)
+        return 1
+
+    try:
+        if PID_FILE.read_text(encoding="utf-8").split()[0] == str(pid):
+            PID_FILE.unlink(missing_ok=True)
+    except (OSError, IndexError):
+        pass
     notify("Keyboard unlocked")
     return 0
 
