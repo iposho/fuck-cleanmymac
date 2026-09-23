@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.4.1 (2026-09-24)
+
+### Fixed
+
+- Cleanup reported `❌ Unavailable simulators: failed (exit 72)` on Macs with the Command Line Tools but no Xcode: `xcrun` exists there, `simctl` does not. The target is now offered only when `xcrun --find simctl` succeeds, and the scan explains the skip
+- A cleanup command whose tool is missing is reported as a skip instead of a failure
+
+
 ## 2.4.0 (2026-09-19)
 
 ### New

@@ -146,6 +146,13 @@ check "folder outside safe paths refused" contains "$out" "path refused by safet
 check "item outside its folder refused" contains "$out" "outside ~/Library/Caches — refused"
 check "/etc untouched" test -f /etc/hosts
 
+# A tool that is not installed (bun here) is a skip, not a failure
+bash "$CLEANER" --plan --no-notify > /dev/null 2>&1
+printf 'C\t93\t%s\tbun cache\tbun_cache\t0\tdownload cache\n' "🗑  System" >> "$PLAN"
+out=$(bash "$CLEANER" --apply --no-notify 2>&1)
+check "missing tool is skipped, not an error" contains "$out" "bun cache: its tool is not available — skipped"
+check "missing tool does not count as a failure" bash -c '! printf "%s" "$1" | grep -q "bun cache.*❌\|❌.*bun cache"' _ "$out"
+
 bash "$CLEANER" --plan --no-notify > /dev/null 2>&1
 chmod 666 "$PLAN"
 out=$(bash "$CLEANER" --apply --no-notify 2>&1)

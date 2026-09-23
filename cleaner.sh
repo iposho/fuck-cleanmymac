@@ -449,7 +449,8 @@ cmd_available() {
         brew_cleanup) fc_has_cmd brew ;;
         pip_cache) fc_has_cmd pip3 ;;
         uv_prune) fc_has_cmd uv ;;
-        simctl_unavailable) fc_has_cmd xcrun ;;
+        # xcrun ships with the Command Line Tools, but simctl only comes with Xcode.
+        simctl_unavailable) fc_has_cmd xcrun && fc_run_timeout 10 xcrun --find simctl >/dev/null 2>&1 ;;
         *) return 1 ;;
     esac
 }
@@ -609,7 +610,11 @@ collect_package_managers() {
     add_dir_target "$CAT_DEV" "Old iPhone/iPad firmware" "$HOME/Library/iTunes/iPhone Software Updates" ".ipsw files, downloaded again when needed"
     add_dir_target "$CAT_DEV" "Old iPhone/iPad firmware" "$HOME/Library/iTunes/iPad Software Updates" ".ipsw files, downloaded again when needed"
     if [ -d "$HOME/Library/Developer/CoreSimulator/Devices" ]; then
-        add_cmd_target "$CAT_DEV" "Unavailable simulators" simctl_unavailable "simulators whose runtime is no longer installed"
+        if cmd_available simctl_unavailable; then
+            add_cmd_target "$CAT_DEV" "Unavailable simulators" simctl_unavailable "simulators whose runtime is no longer installed"
+        else
+            add_skip "Unavailable simulators: simctl needs Xcode (the Command Line Tools alone do not provide it)"
+        fi
     fi
 }
 
@@ -849,7 +854,9 @@ apply_cmd_target() {
             ;;
     esac
     if ! cmd_available "$cmd_id"; then
-        A_ERR="tool is not installed any more — skipped"
+        # Not an error: the tool was uninstalled (or never fully installed) since the plan.
+        log "ℹ️  $A_LABEL: its tool is not available — skipped"
+        A_LABEL=""
         return
     fi
     if [ "$cmd_id" = docker_prune ] && ! fc_run_timeout 5 docker info >/dev/null 2>&1; then
